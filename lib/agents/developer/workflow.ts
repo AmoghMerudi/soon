@@ -80,12 +80,28 @@ async function logAction(
   });
 }
 
+async function getProjectGithubRepo(ticketId: string): Promise<string | null> {
+  "use step";
+
+  const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
+  const ticket = await convex.query(api.queries.getTicket, {
+    ticketId: ticketId as never,
+  });
+  if (!ticket?.projectId) return null;
+  const project = await convex.query(api.queries.getProject, {
+    projectId: ticket.projectId,
+  });
+  return project?.githubRepo ?? null;
+}
+
 export async function developerTicketWorkflow(ticketId: string) {
   "use workflow";
 
   try {
     const { workflowRunId } = getWorkflowMetadata();
     await logAction(ticketId, "agent_started", `Picked up ticket ${ticketId}`);
+
+    const githubRepo = await getProjectGithubRepo(ticketId);
 
     const composioResult = await getComposioDurableTools({
       userId: "developer",
@@ -121,7 +137,12 @@ export async function developerTicketWorkflow(ticketId: string) {
       messages: [
         {
           role: "user",
-          content: `You have been assigned ticket ${ticketId}. Read it with getTicketDetails, then load the appropriate skill and follow its process. Move the ticket to in_review when done.`,
+          content: [
+        `You have been assigned ticket ${ticketId}. Read it with getTicketDetails, then load the appropriate skill and follow its process. Move the ticket to in_review when done.`,
+        githubRepo
+          ? `Project GitHub repo: ${githubRepo} — clone this repo in the E2B sandbox before starting any code work.`
+          : `No GitHub repo is configured for this project yet. If you need one, mark the ticket blocked and ask the CTO to set up a GitHub repo via the CEO.`,
+      ].join("\n\n"),
         },
       ],
       writable,

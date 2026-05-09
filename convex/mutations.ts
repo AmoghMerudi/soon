@@ -88,9 +88,26 @@ async function syncAssigneeState(
   });
 }
 
-export const createTicket = mutation({
+export const updateProject = mutation({
   args: {
     projectId: v.id("projects"),
+    githubRepo: v.optional(v.string()),
+    githubOwner: v.optional(v.string()),
+    description: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const { projectId, ...fields } = args;
+    const patch: Record<string, unknown> = {};
+    if (fields.githubRepo !== undefined) patch.githubRepo = fields.githubRepo;
+    if (fields.githubOwner !== undefined) patch.githubOwner = fields.githubOwner;
+    if (fields.description !== undefined) patch.description = fields.description;
+    await ctx.db.patch(projectId, patch);
+  },
+});
+
+export const createTicket = mutation({
+  args: {
+    projectId: v.optional(v.id("projects")),
     title: v.string(),
     description: v.string(),
     status: statusValidator,
@@ -104,12 +121,12 @@ export const createTicket = mutation({
   handler: async (ctx, args) => {
     const assignee = normalizeAssignee(args.assignee);
     let depth = 0;
+    let projectId = args.projectId;
     if (args.parentTicket) {
       const parent = await ctx.db.get(args.parentTicket);
       if (!parent) throw new ConvexError("parent ticket not found");
-      if (parent.projectId && parent.projectId !== args.projectId) {
-        throw new ConvexError("sub-ticket project must match parent");
-      }
+      // Inherit projectId from parent if not explicitly provided
+      if (!projectId && parent.projectId) projectId = parent.projectId;
       depth = (parent.depth ?? 0) + 1;
       if (depth > MAX_DEPTH) {
         throw new ConvexError(`sub-ticket depth ${depth} exceeds max ${MAX_DEPTH}`);
@@ -117,7 +134,7 @@ export const createTicket = mutation({
     }
 
     const ticketId = await ctx.db.insert("tickets", {
-      projectId: args.projectId,
+      projectId,
       title: args.title,
       description: args.description,
       status: args.status,
@@ -341,7 +358,6 @@ export const retryDispatch = mutation({
         action: "dispatch_pending",
         details: "CEO assignment — trigger via chat at /dashboard/ceo-chat",
         ticketId: args.ticketId,
-        agentRole: args.assignee,
         projectId: ticket.projectId,
       });
       return { status: "pending", via: "ceo_chat" as const };

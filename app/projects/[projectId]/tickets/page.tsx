@@ -1,7 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useQuery } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { STATUS, ROLES } from "@/lib/dashboard/constants";
 import type { StatusKey, PriorityKey, RoleKey } from "@/lib/dashboard/constants";
@@ -19,6 +20,197 @@ interface Ticket {
   tags: string[];
   createdBy: string;
   taggedAgents: string[];
+}
+
+const AGENT_ROLES = ["ceo", "cto", "cmo", "developer", "designer", "marketing"] as const;
+const PRIORITIES = ["critical", "high", "medium", "low"] as const;
+
+function InjectModal({ onClose }: { onClose: () => void }) {
+  const router = useRouter();
+  const projectId = useProjectId();
+  const createTicket = useMutation(api.mutations.createTicket);
+
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [priority, setPriority] = useState<PriorityKey>("medium");
+  const [assignee, setAssignee] = useState<string>("");
+  const [tagsRaw, setTagsRaw] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!title.trim()) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const tags = tagsRaw
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean);
+      const ticketId = await createTicket({
+        projectId,
+        title: title.trim(),
+        description: description.trim(),
+        status: "backlog",
+        priority,
+        assignee: assignee || null,
+        tags,
+        createdBy: "user",
+        taggedAgents: assignee ? [assignee] : [],
+      });
+      onClose();
+      router.push(`/projects/${projectId}/tickets/${ticketId}`);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to create ticket");
+      setSubmitting(false);
+    }
+  }
+
+  const inputStyle: React.CSSProperties = {
+    background: "#26241F",
+    border: "1px solid #3D3B36",
+    borderRadius: 8,
+    color: "#FAFAF7",
+    fontSize: 14,
+    padding: "8px 12px",
+    width: "100%",
+    outline: "none",
+    fontFamily: "inherit",
+  };
+
+  const labelStyle: React.CSSProperties = {
+    fontSize: 11,
+    fontFamily: "monospace",
+    letterSpacing: "0.12em",
+    textTransform: "uppercase",
+    color: "#8E8B82",
+    display: "block",
+    marginBottom: 6,
+  };
+
+  return (
+    <div
+      className="fixed inset-0 flex items-center justify-center"
+      style={{ background: "rgba(10,9,8,0.7)", zIndex: 50 }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div
+        style={{
+          background: "#1A1815",
+          border: "1px solid #3D3B36",
+          borderRadius: 12,
+          padding: 28,
+          width: 480,
+          maxWidth: "calc(100vw - 48px)",
+        }}
+      >
+        <div className="flex justify-between items-baseline mb-5">
+          <span
+            className="font-sans font-semibold"
+            style={{ fontSize: 18, color: "#FAFAF7", letterSpacing: "-0.01em" }}
+          >
+            Inject ticket
+          </span>
+          <button
+            onClick={onClose}
+            style={{ background: "none", border: "none", color: "#8E8B82", cursor: "pointer", fontSize: 18, lineHeight: 1 }}
+          >
+            ×
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <div>
+            <label style={labelStyle}>Title *</label>
+            <input
+              style={inputStyle}
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="What needs to be done?"
+              autoFocus
+              required
+            />
+          </div>
+
+          <div>
+            <label style={labelStyle}>Description</label>
+            <textarea
+              style={{ ...inputStyle, minHeight: 80, resize: "vertical" }}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Provide context for the agent..."
+            />
+          </div>
+
+          <div className="flex gap-3">
+            <div style={{ flex: 1 }}>
+              <label style={labelStyle}>Priority</label>
+              <select
+                style={{ ...inputStyle, cursor: "pointer" }}
+                value={priority}
+                onChange={(e) => setPriority(e.target.value as PriorityKey)}
+              >
+                {PRIORITIES.map((p) => (
+                  <option key={p} value={p} style={{ background: "#26241F" }}>
+                    {p.charAt(0).toUpperCase() + p.slice(1)}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div style={{ flex: 1 }}>
+              <label style={labelStyle}>Assign to agent</label>
+              <select
+                style={{ ...inputStyle, cursor: "pointer" }}
+                value={assignee}
+                onChange={(e) => setAssignee(e.target.value)}
+              >
+                <option value="" style={{ background: "#26241F" }}>— unassigned —</option>
+                {AGENT_ROLES.map((r) => (
+                  <option key={r} value={r} style={{ background: "#26241F" }}>
+                    {ROLES[r].label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label style={labelStyle}>Tags (comma-separated)</label>
+            <input
+              style={inputStyle}
+              value={tagsRaw}
+              onChange={(e) => setTagsRaw(e.target.value)}
+              placeholder="e.g. backend, auth, bug"
+            />
+          </div>
+
+          {error && (
+            <div
+              style={{
+                background: "#3A1A14",
+                border: "1px solid #C8483A",
+                borderRadius: 6,
+                padding: "8px 12px",
+                color: "#F0A097",
+                fontSize: 13,
+              }}
+            >
+              {error}
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2 mt-1">
+            <Btn kind="ghost" onClick={onClose}>Cancel</Btn>
+            <Btn kind="signal" disabled={submitting || !title.trim()}>
+              {submitting ? "Creating…" : assignee ? `Inject → ${ROLES[assignee as RoleKey]?.label ?? assignee}` : "Inject ticket"}
+            </Btn>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
 }
 
 function TicketCard({ ticket, onClick }: { ticket: Ticket; onClick: (t: Ticket) => void }) {
@@ -137,8 +329,11 @@ const COLUMNS: StatusKey[] = ["backlog", "in_progress", "in_review", "resolved",
 export default function TicketsPage() {
   const router = useRouter();
   const projectId = useProjectId();
+  const [showModal, setShowModal] = useState(false);
+
   return (
     <div className="relative h-full">
+      {showModal && <InjectModal onClose={() => setShowModal(false)} />}
       <div className="flex justify-between items-baseline" style={{ padding: "20px 24px 0" }}>
         <h1
           className="font-sans font-semibold"
@@ -147,7 +342,9 @@ export default function TicketsPage() {
           Tickets
         </h1>
         <div className="flex gap-2">
-          <Btn kind="secondary" icon={<span>+</span>}>Inject ticket</Btn>
+          <Btn kind="secondary" icon={<span>+</span>} onClick={() => setShowModal(true)}>
+            Inject ticket
+          </Btn>
         </div>
       </div>
       <div className="flex gap-2.5 items-start" style={{ padding: "20px 24px" }}>

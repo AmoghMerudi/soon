@@ -73,7 +73,7 @@ export async function ctoWorkflow(ticketId: string) {
     });
 
     const agent = new DurableAgent({
-      model: openai("gpt-4o"),
+      model: openai("gpt-5.4"),
       instructions: CTO_INSTRUCTIONS + buildSkillsPrompt(),
       tools: observedTools,
     });
