@@ -13,20 +13,47 @@ export function getComposio(): Composio<VercelProvider> {
   return _composio;
 }
 
-export async function getGithubToolsForAgent(agentEntityId: string): Promise<ToolSet> {
-  const composio = getComposio();
-  const tools = await composio.tools.get(agentEntityId, {
-    toolkits: ["github"],
-    limit: 30,
-  });
-  return tools as ToolSet;
-}
+/**
+ * Toolkits we route through Composio. Convex is intentionally excluded — we use
+ * the Convex client directly for our own database, not Composio.
+ */
+const COMPOSIO_TOOLKITS = new Set(["github", "vercel"]);
 
 /**
- * Returns the OAuth URL the user must visit to connect this agent's Composio entity
- * to a toolkit (e.g. github). The promise also resolves once the connection is active —
- * but for the onboarding script we just print the URL and let the user open it.
+ * Fetch all Composio-backed tools for an agent based on its `enabledTools`.
+ * Silently skips toolkits with no active connection so missing OAuth on one
+ * toolkit doesn't break the others.
  */
+export async function getComposioToolsForAgent(
+  agentEntityId: string,
+  enabledTools: string[],
+): Promise<ToolSet> {
+  const toolkits = enabledTools.filter((t) => COMPOSIO_TOOLKITS.has(t));
+  if (toolkits.length === 0) return {} as ToolSet;
+
+  const composio = getComposio();
+  const merged: ToolSet = {} as ToolSet;
+
+  await Promise.all(
+    toolkits.map(async (toolkit) => {
+      try {
+        const tools = await composio.tools.get(agentEntityId, {
+          toolkits: [toolkit],
+          limit: 30,
+        });
+        Object.assign(merged, tools);
+      } catch (err) {
+        console.warn(
+          `[composio] could not load ${toolkit} for ${agentEntityId}:`,
+          err instanceof Error ? err.message : err,
+        );
+      }
+    }),
+  );
+
+  return merged;
+}
+
 export async function authorizeAgentToolkit(
   agentEntityId: string,
   toolkitSlug: string,

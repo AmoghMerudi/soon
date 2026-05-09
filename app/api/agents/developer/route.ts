@@ -1,11 +1,12 @@
 import { generateText, stepCountIs } from "ai";
 import { openai } from "@ai-sdk/openai";
 import { developerTools } from "@/lib/agents/developer-tools";
-import { getGithubToolsForAgent } from "@/lib/agents/composio";
+import { getComposioToolsForAgent } from "@/lib/agents/composio";
 import { getConvexClient } from "@/lib/agent/convex-client";
 import { api } from "@/convex/_generated/api";
 
 const DEVELOPER_ENTITY_ID = "developer";
+const DEVELOPER_TOOLKITS = ["github", "vercel"];
 
 export const maxDuration = 300;
 
@@ -19,7 +20,7 @@ Personality:
 Your workflow on a ticket:
 1. Call getTicketDetails to read the full ticket, parent context, and any prior comments/artifacts.
 2. Move the ticket to "in_progress" via updateTicketStatus.
-3. Do the work (in later batches you'll have GitHub/Vercel/E2B tools — for now, summarize what you'd do as a comment).
+3. Do the work using GitHub + Vercel tools (E2B sandbox lands in a later batch).
 4. Add a comment describing what you did and any decisions worth remembering.
 5. Attach any artifacts (PR url, preview deploy, documents) via addArtifact.
 6. Move the ticket to "in_review" via updateTicketStatus when handing off to the CTO for review.
@@ -29,6 +30,12 @@ GitHub tools (when available):
 - Default to creating a feature branch named "agent/<short-slug>" off the repo's default branch.
 - All code changes ship as pull requests — never push directly to the default branch.
 - After opening a PR, attach its URL to the ticket via addArtifact (type: "pr").
+
+Vercel tools (when available):
+- After opening a PR, use VERCEL_* tools to trigger or fetch the preview deployment for that branch.
+- Poll deployment status until it's READY or ERROR — don't claim done while still BUILDING.
+- Once a preview is READY, attach the deployment URL to the ticket via addArtifact (type: "deployment").
+- If the build fails, read the build logs and add a comment summarizing the error before marking blocked.
 
 Constraints:
 - You are NEVER allowed to push directly to the main branch — all code changes go through pull requests.
@@ -69,22 +76,33 @@ async function runDeveloperAgent(ticketId: string) {
     ticketId: ticketId as never,
   });
 
-  let githubTools = {};
+  let composioTools = {};
   try {
-    githubTools = await getGithubToolsForAgent(DEVELOPER_ENTITY_ID);
+    composioTools = await getComposioToolsForAgent(
+      DEVELOPER_ENTITY_ID,
+      DEVELOPER_TOOLKITS,
+    );
   } catch (err) {
     await convex.mutation(api.mutations.logAgentAction, {
       agent: "Developer",
       action: "composio_unavailable",
-      details: `GitHub tools not loaded: ${err instanceof Error ? err.message : String(err)}`,
+      details: `Composio tools not loaded: ${err instanceof Error ? err.message : String(err)}`,
       ticketId: ticketId as never,
     });
   }
 
+  const composioToolNames = Object.keys(composioTools);
+  await convex.mutation(api.mutations.logAgentAction, {
+    agent: "Developer",
+    action: "tools_loaded",
+    details: `Composio tools loaded (${composioToolNames.length}): ${composioToolNames.slice(0, 8).join(", ")}${composioToolNames.length > 8 ? "..." : ""}`,
+    ticketId: ticketId as never,
+  });
+
   const result = await generateText({
     model: openai("gpt-4o"),
     system: DEVELOPER_SYSTEM_PROMPT,
-    tools: { ...developerTools, ...githubTools },
+    tools: { ...developerTools, ...composioTools },
     stopWhen: stepCountIs(30),
     prompt: `You have been assigned ticket ${ticketId}. Read it with getTicketDetails, do the work, and hand it off for review. Move the ticket to in_review when done.`,
   });
