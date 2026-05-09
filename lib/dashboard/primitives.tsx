@@ -2,6 +2,7 @@
 
 import { STATUS, ROLES, PRIORITY } from "./constants";
 import type { StatusKey, RoleKey, PriorityKey } from "./constants";
+import { RoleAvatar } from "./avatars";
 
 export function StatusPill({ status }: { status: StatusKey }) {
   const s = STATUS[status] ?? STATUS.backlog;
@@ -47,18 +48,17 @@ export function PriorityTag({ priority }: { priority: PriorityKey }) {
 
 export function Avatar({ role, size = 24 }: { role: RoleKey; size?: number }) {
   const r = ROLES[role] ?? ROLES.ceo;
+  const spriteSize = Math.round(size * 0.86);
   return (
     <span
-      className="inline-flex items-center justify-center rounded-full font-mono font-bold shrink-0"
+      className="inline-flex items-center justify-center rounded-full overflow-hidden shrink-0"
       style={{
         width: size,
         height: size,
         background: r.color,
-        color: r.fg,
-        fontSize: Math.round(size * 0.42),
       }}
     >
-      {r.initial}
+      <RoleAvatar role={role} size={spriteSize} />
     </span>
   );
 }
