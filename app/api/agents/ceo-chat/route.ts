@@ -1,5 +1,5 @@
 import { ToolLoopAgent, createAgentUIStreamResponse } from "ai";
-import { anthropic } from "@ai-sdk/anthropic";
+import { openai } from "@ai-sdk/openai";
 import { createCeoChatTools } from "@/lib/agents/ceo-chat-tools";
 import {
   recallMemories,
@@ -80,7 +80,7 @@ export async function POST(request: Request) {
   };
 
   const agent = new ToolLoopAgent({
-    model: anthropic("claude-sonnet-4-6"),
+    model: openai("gpt-4o"),
     instructions: CEO_CHAT_INSTRUCTIONS + formatRecalledForPrompt(recalled),
     tools,
   });

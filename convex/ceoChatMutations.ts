@@ -1,5 +1,5 @@
 import { mutation } from "./_generated/server";
-import { ConvexError, v } from "convex/values";
+import { v } from "convex/values";
 
 export const createThread = mutation({
   args: {
@@ -41,7 +41,10 @@ export const saveMessage = mutation({
   },
   handler: async (ctx, args) => {
     const thread = await ctx.db.get(args.threadId);
-    if (!thread) throw new ConvexError("thread not found");
+    if (!thread) {
+      // Stale thread id from client (e.g. deleted mid-session) — drop the message rather than crash the chat.
+      return;
+    }
     const now = Date.now();
     await ctx.db.insert("ceoChatMessages", {
       projectId: thread.projectId,
