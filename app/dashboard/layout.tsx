@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { ROLES, SEED_AGENTS } from "@/lib/dashboard/constants";
-import type { RoleKey } from "@/lib/dashboard/constants";
 import { Avatar, Btn } from "@/lib/dashboard/primitives";
+import { CEOChatPanel } from "@/lib/dashboard/ceo-chat-panel";
 
 const NAV_ITEMS = [
   { id: "tickets",  href: "/dashboard/tickets",  label: "Tickets",  glyph: "◆" },
@@ -17,10 +17,12 @@ function TopBar({
   paused,
   onPause,
   onNewCompany,
+  onChatCEO,
 }: {
   paused: boolean;
   onPause: () => void;
   onNewCompany: () => void;
+  onChatCEO: () => void;
 }) {
   const live = !paused;
   return (
@@ -62,6 +64,9 @@ function TopBar({
         <span style={{ color: "#FAFAF7" }}>
           {paused ? "▶ Resume" : "❚❚ Pause agents"}
         </span>
+      </Btn>
+      <Btn kind="secondary" onClick={onChatCEO}>
+        ✉ Chat CEO
       </Btn>
       <Btn kind="signal" onClick={onNewCompany}>
         + New company
@@ -232,6 +237,13 @@ export default function DashboardLayout({
 }) {
   const pathname = usePathname();
   const [paused, setPaused] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatInitialMessage, setChatInitialMessage] = useState<string | undefined>();
+
+  function openChat(initialMessage?: string) {
+    setChatInitialMessage(initialMessage);
+    setChatOpen(true);
+  }
 
   return (
     <div
@@ -241,9 +253,14 @@ export default function DashboardLayout({
       <TopBar
         paused={paused}
         onPause={() => setPaused((p) => !p)}
-        onNewCompany={() => {}}
+        onChatCEO={() => openChat()}
+        onNewCompany={() =>
+          openChat(
+            "I want to start a new company. Let me describe the idea and let's work through the plan together."
+          )
+        }
       />
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden relative">
         <Sidebar pathname={pathname} />
         <div
           className="flex-1 overflow-y-auto"
@@ -251,6 +268,11 @@ export default function DashboardLayout({
         >
           {children}
         </div>
+        <CEOChatPanel
+          open={chatOpen}
+          onClose={() => setChatOpen(false)}
+          initialMessage={chatInitialMessage}
+        />
       </div>
     </div>
   );
