@@ -1,6 +1,10 @@
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "@/convex/_generated/api";
+import { getWritable } from "workflow";
+import type { UIMessageChunk } from "ai";
 import { z } from "zod";
+import { getSkillContent } from "./skills";
+import { questionHook } from "./hooks";
 
 const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
@@ -181,6 +185,44 @@ async function createSubTicketStep(input: {
   return { ticketId: ticketId.toString(), title: input.title };
 }
 
+// --- Skill & question step functions ---
+
+async function loadSkillStep(input: { name: string }) {
+  "use step";
+
+  const content = getSkillContent(input.name);
+  if (!content) return { error: `Skill "${input.name}" not found` };
+  return { name: input.name, instructions: content };
+}
+
+async function writeQuestionToStream(
+  toolCallId: string,
+  question: string,
+  options: string[]
+) {
+  "use step";
+
+  const writable = getWritable<UIMessageChunk>();
+  const writer = writable.getWriter();
+  await writer.write({
+    type: "data-question",
+    id: toolCallId,
+    data: { question, options },
+  });
+  writer.releaseLock();
+}
+
+async function askQuestionExecute(
+  input: { question: string; options: string[] },
+  { toolCallId }: { toolCallId: string }
+) {
+  await writeQuestionToStream(toolCallId, input.question, input.options);
+
+  const hook = questionHook.create({ token: toolCallId });
+  const { answer } = await hook;
+  return answer;
+}
+
 // --- Tool definitions for DurableAgent ---
 
 export const ceoTools = {
@@ -212,9 +254,9 @@ export const ceoTools = {
 
   assignTicket: {
     description:
-      "Assign or reassign a ticket to an agent. CEO delegates to CTO or CMO only.",
+      "Assign or reassign a ticket to an agent. CEO delegates to CTO or CMO only. Use the EXACT ticketId from createTicket.",
     inputSchema: z.object({
-      ticketId: z.string(),
+      ticketId: z.string().describe("Exact ticket ID from createTicket"),
       assignee: z
         .nullable(z.string())
         .describe("CTO, CMO, or null to unassign"),
@@ -226,7 +268,7 @@ export const ceoTools = {
     description:
       "Move a ticket through workflow states: backlog → in_progress → in_review → resolved. Use blocked when work is stuck.",
     inputSchema: z.object({
-      ticketId: z.string(),
+      ticketId: z.string().describe("Exact ticket ID from createTicket"),
       status: z.enum([
         "backlog",
         "in_progress",
@@ -240,9 +282,13 @@ export const ceoTools = {
 
   addComment: {
     description:
-      "Add strategic context, feedback, or review notes to a ticket.",
+      "Add strategic context, feedback, or review notes to a ticket. Use the EXACT ticketId string returned by createTicket — it is a long alphanumeric ID.",
     inputSchema: z.object({
-      ticketId: z.string(),
+      ticketId: z
+        .string()
+        .describe(
+          "The EXACT ticket ID returned by createTicket (long alphanumeric string, e.g. 'jx7akyp84a3ws1xfmx4cgxh9mn86db7r'). Do NOT shorten or modify it."
+        ),
       content: z
         .string()
         .describe("Strategic guidance, feedback, or review notes"),
@@ -280,7 +326,7 @@ export const ceoTools = {
     description:
       "Review completed work on a ticket — fetches ticket details, all comments, and attached artifacts (PRs, designs, deployments). Use to approve or request changes.",
     inputSchema: z.object({
-      ticketId: z.string(),
+      ticketId: z.string().describe("Exact ticket ID from createTicket"),
     }),
     execute: reviewArtifactStep,
   },
@@ -304,5 +350,28 @@ export const ceoTools = {
         .describe("Agents to notify — always include CEO"),
     }),
     execute: createSubTicketStep,
+  },
+
+  loadSkill: {
+    description:
+      "Load a skill's full instructions by name. Use when a task matches an available skill.",
+    inputSchema: z.object({
+      name: z.string().describe("Skill name from the available skills list"),
+    }),
+    execute: loadSkillStep,
+  },
+
+  askQuestion: {
+    description:
+      "Present a structured question to the user with selectable options. The workflow pauses until the user answers. Use for discovery, clarification, or decisions that need user input.",
+    inputSchema: z.object({
+      question: z.string().describe("The question to ask the user"),
+      options: z
+        .array(z.string())
+        .describe(
+          "2-6 concrete answer choices. Always include a 'Something else' option last."
+        ),
+    }),
+    execute: askQuestionExecute,
   },
 };
