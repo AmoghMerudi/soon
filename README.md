@@ -1,36 +1,64 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Conductor
+
+**An AI company operating system.** Give it a business idea, and autonomous AI agents — CEO, Developer, Designer, Marketing — plan, build, deploy, and operate the entire company end-to-end.
+
+The system is business-agnostic. Demo: hand it a children's picture book company and watch it ship a working product to production with real Stripe revenue. Same loop works for any business.
+
+## How It Works
+
+1. You enter a business idea on the dashboard.
+2. The **CEO agent** decomposes it into a backlog of tickets with tags, priorities, and acceptance criteria.
+3. Role-specialized agents pick up tickets matching their tags, do the work using their tools, attach artifacts (PR URLs, deployments, designs, posts), and resolve.
+4. CEO reviews resolved work, opens follow-ups, and iterates until the business is live and operating.
+
+Agents communicate **only through tickets** — no direct agent-to-agent calls. Full audit trail, fully observable.
+
+## Agents
+
+| Agent | Tools |
+|-------|-------|
+| **CEO** | Convex (ticket CRUD), revenue/analytics |
+| **Developer** | E2B Sandbox, GitHub, Vercel |
+| **Designer** | Google AI Studio, Cloudinary |
+| **Marketing** | Twitter/X, LinkedIn, Email |
+
+All external tools are wired through **Composio**.
+
+## Tech Stack
+
+- **Framework:** Next.js 16 (App Router)
+- **Hosting:** Vercel
+- **Database / Real-time:** Convex
+- **AI:** Claude via AI SDK + Vercel AI Gateway
+- **Agent Tools:** Composio
+- **Code Execution:** E2B Sandbox
+- **Image Generation:** Google AI Studio
+- **Image Processing:** Cloudinary
+- **Payments:** Stripe (via Composio)
+- **Styling:** Tailwind CSS v4
 
 ## Getting Started
 
-First, run the development server:
-
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
+bun install
 bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) and click **New Company** to kick off a run.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Dashboard
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- **Agent Status Board** — who's active, idle, or blocked
+- **Ticket Kanban** — backlog → in progress → review → done, real-time
+- **Activity Feed** — chronological stream of every agent action
+- **Revenue Tracker** — live Stripe revenue from the operated business
+- **System Controls** — start a company, inject manual tickets, pause/resume agents, kill switch
 
-## Learn More
+## Safety Rails
 
-To learn more about Next.js, take a look at the following resources:
+- Max ticket depth: 3 levels
+- Max active tickets per agent: 5
+- Circuit breaker on runaway ticket creation (>20 in 10 min)
+- Blocked tickets auto-escalate to CEO after 5 minutes
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+See [PRD.md](./PRD.md) for the full product spec.
