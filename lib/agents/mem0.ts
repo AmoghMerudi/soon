@@ -31,8 +31,8 @@ export async function recallMemories(
   if (!client || !query.trim()) return [];
   try {
     const res = await client.search(query, {
-      user_id: memoryUserId(projectId, agentId),
-      limit,
+      filters: { user_id: memoryUserId(projectId, agentId) },
+      topK: limit,
     } as Parameters<typeof client.search>[1]);
     return (res.results ?? []).map((m) => ({
       id: m.id ?? "",
@@ -54,16 +54,26 @@ export async function saveMemory(
   const client = getClient();
   if (!client || !content.trim()) return null;
   try {
-    const res = await client.add(
+    const res = (await client.add(
       [{ role: "user", content }],
       {
         user_id: memoryUserId(projectId, agentId),
         metadata: metadata as Record<string, string> | undefined,
       } as Parameters<typeof client.add>[1]
-    );
-    return res?.[0]?.id ?? null;
+    )) as unknown;
+    // Mem0 v3 returns { status: "PENDING", eventId } for async processing,
+    // or an array of Memory objects for synchronous saves.
+    if (Array.isArray(res)) return res[0]?.id ?? null;
+    if (res && typeof res === "object" && "eventId" in res) {
+      return (res as { eventId: string }).eventId;
+    }
+    return null;
   } catch (err) {
-    console.warn("[mem0] save failed:", err instanceof Error ? err.message : err);
+    console.warn(
+      "[mem0] save failed:",
+      err instanceof Error ? err.message : err,
+      err instanceof Error && "cause" in err ? err.cause : undefined
+    );
     return null;
   }
 }
