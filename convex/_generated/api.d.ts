@@ -8,6 +8,8 @@
  * @module
  */
 
+import type * as ceoChatMutations from "../ceoChatMutations.js";
+import type * as ceoChatQueries from "../ceoChatQueries.js";
 import type * as mutations from "../mutations.js";
 import type * as queries from "../queries.js";
 import type * as seedSkills from "../seedSkills.js";
@@ -20,6 +22,8 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  ceoChatMutations: typeof ceoChatMutations;
+  ceoChatQueries: typeof ceoChatQueries;
   mutations: typeof mutations;
   queries: typeof queries;
   seedSkills: typeof seedSkills;
