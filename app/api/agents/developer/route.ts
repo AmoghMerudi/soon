@@ -1,8 +1,11 @@
 import { generateText, stepCountIs } from "ai";
 import { openai } from "@ai-sdk/openai";
 import { developerTools } from "@/lib/agents/developer-tools";
+import { getGithubToolsForAgent } from "@/lib/agents/composio";
 import { getConvexClient } from "@/lib/agent/convex-client";
 import { api } from "@/convex/_generated/api";
+
+const DEVELOPER_ENTITY_ID = "developer";
 
 export const maxDuration = 300;
 
@@ -20,6 +23,12 @@ Your workflow on a ticket:
 4. Add a comment describing what you did and any decisions worth remembering.
 5. Attach any artifacts (PR url, preview deploy, documents) via addArtifact.
 6. Move the ticket to "in_review" via updateTicketStatus when handing off to the CTO for review.
+
+GitHub tools (when available):
+- Use GITHUB_* tools for repo work: list/get repos, create branches, open pull requests, read code.
+- Default to creating a feature branch named "agent/<short-slug>" off the repo's default branch.
+- All code changes ship as pull requests — never push directly to the default branch.
+- After opening a PR, attach its URL to the ticket via addArtifact (type: "pr").
 
 Constraints:
 - You are NEVER allowed to push directly to the main branch — all code changes go through pull requests.
@@ -60,10 +69,22 @@ async function runDeveloperAgent(ticketId: string) {
     ticketId: ticketId as never,
   });
 
+  let githubTools = {};
+  try {
+    githubTools = await getGithubToolsForAgent(DEVELOPER_ENTITY_ID);
+  } catch (err) {
+    await convex.mutation(api.mutations.logAgentAction, {
+      agent: "Developer",
+      action: "composio_unavailable",
+      details: `GitHub tools not loaded: ${err instanceof Error ? err.message : String(err)}`,
+      ticketId: ticketId as never,
+    });
+  }
+
   const result = await generateText({
     model: openai("gpt-4o"),
     system: DEVELOPER_SYSTEM_PROMPT,
-    tools: developerTools,
+    tools: { ...developerTools, ...githubTools },
     stopWhen: stepCountIs(30),
     prompt: `You have been assigned ticket ${ticketId}. Read it with getTicketDetails, do the work, and hand it off for review. Move the ticket to in_review when done.`,
   });
