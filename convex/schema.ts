@@ -107,4 +107,19 @@ export default defineSchema({
     .index("by_name", ["name"])
     .index("by_agent", ["agent"])
     .index("by_active", ["isActive"]),
+
+  ceoChatThreads: defineTable({
+    title: v.string(),
+    preview: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }).index("by_updated", ["updatedAt"]),
+
+  ceoChatMessages: defineTable({
+    threadId: v.id("ceoChatThreads"),
+    messageId: v.string(),
+    role: v.string(),
+    serialized: v.string(),
+    createdAt: v.number(),
+  }).index("by_thread", ["threadId", "createdAt"]),
 });

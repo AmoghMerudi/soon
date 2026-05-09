@@ -1,0 +1,106 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e3]:
+      - generic [ref=e4]: 0to1.
+      - generic [ref=e5]:
+        - generic [ref=e6]: /dashboard
+        - generic [ref=e7]: Live
+      - button "❚❚ Pause agents" [ref=e9] [cursor=pointer]:
+        - generic [ref=e10]: ❚❚ Pause agents
+      - button "✉ Chat CEO" [ref=e11] [cursor=pointer]
+      - button "+ New company" [ref=e12] [cursor=pointer]
+    - generic [ref=e13]:
+      - generic [ref=e14]:
+        - generic [ref=e15]:
+          - generic [ref=e16]: Workspace
+          - generic [ref=e17]: Children's books co.
+          - generic [ref=e18]: day 1
+        - generic [ref=e19]:
+          - link "◆ Tickets" [ref=e20] [cursor=pointer]:
+            - /url: /dashboard/tickets
+            - generic [ref=e22]: ◆
+            - text: Tickets
+          - link "● Agents" [ref=e23] [cursor=pointer]:
+            - /url: /dashboard/agents
+            - generic [ref=e24]: ●
+            - text: Agents
+          - link "⇄ Threads" [ref=e25] [cursor=pointer]:
+            - /url: /dashboard/threads
+            - generic [ref=e26]: ⇄
+            - text: Threads
+          - link "✉ CEO Chat" [ref=e27] [cursor=pointer]:
+            - /url: /dashboard/ceo-chat
+            - generic [ref=e28]: ✉
+            - text: CEO Chat
+          - link "$ Revenue" [ref=e29] [cursor=pointer]:
+            - /url: /dashboard/revenue
+            - generic [ref=e30]: $
+            - text: Revenue
+        - generic [ref=e31]:
+          - generic [ref=e32]: Agents
+          - generic [ref=e33]:
+            - generic [ref=e34]:
+              - generic [ref=e35]: C
+              - generic [ref=e36]:
+                - generic [ref=e37]: CEO
+                - generic [ref=e38]: working
+            - generic [ref=e40]:
+              - generic [ref=e41]: T
+              - generic [ref=e42]:
+                - generic [ref=e43]: CTO
+                - generic [ref=e44]: working
+            - generic [ref=e46]:
+              - generic [ref=e47]: M
+              - generic [ref=e48]:
+                - generic [ref=e49]: CMO
+                - generic [ref=e50]: working
+            - generic [ref=e52]:
+              - generic [ref=e53]: D
+              - generic [ref=e54]:
+                - generic [ref=e55]: Developer
+                - generic [ref=e56]: working
+            - generic [ref=e58]:
+              - generic [ref=e59]: D
+              - generic [ref=e60]:
+                - generic [ref=e61]: Designer
+                - generic [ref=e62]: working
+            - generic [ref=e64]:
+              - generic [ref=e65]: M
+              - generic [ref=e66]:
+                - generic [ref=e67]: Marketing
+                - generic [ref=e68]: idle
+      - generic [ref=e70]:
+        - generic [ref=e71]:
+          - heading "Tickets" [level=1] [ref=e72]
+          - button "+ Inject ticket" [ref=e74] [cursor=pointer]:
+            - generic [ref=e75]: +
+            - text: Inject ticket
+        - generic [ref=e76]:
+          - generic [ref=e77]:
+            - generic [ref=e78]:
+              - generic [ref=e79]: Backlog
+              - generic [ref=e81]: "0"
+            - generic [ref=e83]: —
+          - generic [ref=e84]:
+            - generic [ref=e85]:
+              - generic [ref=e86]: In progress
+              - generic [ref=e88]: "0"
+            - generic [ref=e90]: —
+          - generic [ref=e91]:
+            - generic [ref=e92]:
+              - generic [ref=e93]: In review
+              - generic [ref=e95]: "0"
+            - generic [ref=e97]: —
+          - generic [ref=e98]:
+            - generic [ref=e99]:
+              - generic [ref=e100]: Resolved
+              - generic [ref=e102]: "0"
+            - generic [ref=e104]: —
+          - generic [ref=e105]:
+            - generic [ref=e106]:
+              - generic [ref=e107]: Blocked
+              - generic [ref=e109]: "0"
+            - generic [ref=e111]: —
+  - button "Open Next.js Dev Tools" [ref=e117] [cursor=pointer]:
+    - img [ref=e118]
+  - alert [ref=e121]

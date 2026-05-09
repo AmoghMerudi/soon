@@ -1,0 +1,113 @@
+- generic [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e3]:
+      - generic [ref=e4]: 0to1.
+      - generic [ref=e5]:
+        - generic [ref=e6]: /dashboard
+        - generic [ref=e7]: Live
+      - button "❚❚ Pause agents" [ref=e9] [cursor=pointer]:
+        - generic [ref=e10]: ❚❚ Pause agents
+      - button "✉ Chat CEO" [ref=e11] [cursor=pointer]
+      - button "+ New company" [ref=e12] [cursor=pointer]
+    - generic [ref=e13]:
+      - generic [ref=e14]:
+        - generic [ref=e15]:
+          - generic [ref=e16]: Workspace
+          - generic [ref=e17]: Children's books co.
+          - generic [ref=e18]: day 1
+        - generic [ref=e19]:
+          - link "◆ Tickets" [ref=e20] [cursor=pointer]:
+            - /url: /dashboard/tickets
+            - generic [ref=e21]: ◆
+            - text: Tickets
+          - link "● Agents" [ref=e22] [cursor=pointer]:
+            - /url: /dashboard/agents
+            - generic [ref=e23]: ●
+            - text: Agents
+          - link "⇄ Threads" [ref=e24] [cursor=pointer]:
+            - /url: /dashboard/threads
+            - generic [ref=e25]: ⇄
+            - text: Threads
+          - link "✉ CEO Chat" [ref=e26] [cursor=pointer]:
+            - /url: /dashboard/ceo-chat
+            - generic [ref=e28]: ✉
+            - text: CEO Chat
+          - link "$ Revenue" [ref=e29] [cursor=pointer]:
+            - /url: /dashboard/revenue
+            - generic [ref=e30]: $
+            - text: Revenue
+        - generic [ref=e31]:
+          - generic [ref=e32]: Agents
+          - generic [ref=e33]:
+            - generic [ref=e34]:
+              - generic [ref=e35]: C
+              - generic [ref=e36]:
+                - generic [ref=e37]: CEO
+                - generic [ref=e38]: working
+            - generic [ref=e40]:
+              - generic [ref=e41]: T
+              - generic [ref=e42]:
+                - generic [ref=e43]: CTO
+                - generic [ref=e44]: working
+            - generic [ref=e46]:
+              - generic [ref=e47]: M
+              - generic [ref=e48]:
+                - generic [ref=e49]: CMO
+                - generic [ref=e50]: working
+            - generic [ref=e52]:
+              - generic [ref=e53]: D
+              - generic [ref=e54]:
+                - generic [ref=e55]: Developer
+                - generic [ref=e56]: working
+            - generic [ref=e58]:
+              - generic [ref=e59]: D
+              - generic [ref=e60]:
+                - generic [ref=e61]: Designer
+                - generic [ref=e62]: working
+            - generic [ref=e64]:
+              - generic [ref=e65]: M
+              - generic [ref=e66]:
+                - generic [ref=e67]: Marketing
+                - generic [ref=e68]: idle
+      - generic [ref=e70]:
+        - generic [ref=e72]:
+          - generic [ref=e73]:
+            - generic [ref=e74]: Direct line
+            - heading "CEO Chat" [level=1] [ref=e75]
+          - button "+ New chat" [ref=e76] [cursor=pointer]
+        - generic [ref=e77]:
+          - button "hiceo 2m × hiceo" [active] [ref=e95] [cursor=pointer]:
+            - generic [ref=e96]:
+              - generic [ref=e97]: hiceo
+              - generic [ref=e98]:
+                - generic [ref=e99]: 2m
+                - button "×" [ref=e100]
+            - generic [ref=e101]: hiceo
+          - generic [ref=e81]:
+            - generic [ref=e114]:
+              - generic [ref=e115]: C
+              - generic [ref=e116]:
+                - generic [ref=e117]: CEO
+                - generic [ref=e118]: ● hiceo
+            - generic [ref=e119]:
+              - generic [ref=e121]:
+                - generic [ref=e122]: C
+                - generic [ref=e123]: Talk to the CEO.
+                - generic [ref=e124]: Describe what you want to build. I'll research the market, draft a plan, and walk you through it. You approve before any agent moves.
+              - generic [ref=e126]:
+                - textbox "What do you want to build?" [ref=e127]
+                - button "↑ Send" [disabled] [ref=e128]
+  - generic [ref=e90] [cursor=pointer]:
+    - button "Open Next.js Dev Tools" [ref=e91]:
+      - img [ref=e92]
+    - generic [ref=e102]:
+      - button "Open issues overlay" [ref=e103]:
+        - generic [ref=e104]:
+          - generic [ref=e105]: "1"
+          - generic [ref=e106]: "2"
+        - generic [ref=e107]:
+          - text: Issue
+          - generic [ref=e108]: s
+      - button "Collapse issues badge" [ref=e109]:
+        - img [ref=e110]
+  - alert [ref=e112]

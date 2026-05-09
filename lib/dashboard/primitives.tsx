@@ -1,7 +1,7 @@
 "use client";
 
-import { STATUS, ROLES, PRIORITY, THREAD_STATUS } from "./constants";
-import type { StatusKey, RoleKey, PriorityKey, ThreadStatusKey } from "./constants";
+import { STATUS, ROLES, PRIORITY } from "./constants";
+import type { StatusKey, RoleKey, PriorityKey } from "./constants";
 
 export function StatusPill({ status }: { status: StatusKey }) {
   const s = STATUS[status] ?? STATUS.backlog;
@@ -159,29 +159,6 @@ export function StateBadge({ state }: { state: "working" | "idle" | "blocked" })
       }}
     >
       Idle
-    </span>
-  );
-}
-
-export function ThreadStatusBadge({ status }: { status: ThreadStatusKey }) {
-  const s = THREAD_STATUS[status] ?? THREAD_STATUS.active;
-  return (
-    <span
-      className="inline-flex items-center gap-1.5 font-mono font-semibold uppercase leading-none"
-      style={{
-        fontSize: 11,
-        letterSpacing: "0.1em",
-        padding: "3px 9px",
-        background: s.bg,
-        color: s.fg,
-        borderRadius: 999,
-      }}
-    >
-      <span
-        className={s.pulse ? "pulse" : ""}
-        style={{ width: 5, height: 5, borderRadius: "50%", background: s.dot }}
-      />
-      {s.label}
     </span>
   );
 }

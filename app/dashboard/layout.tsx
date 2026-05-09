@@ -1,28 +1,27 @@
 "use client";
 
 import { useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { ROLES, SEED_AGENTS } from "@/lib/dashboard/constants";
 import { Avatar, Btn } from "@/lib/dashboard/primitives";
-import { CEOChatPanel } from "@/lib/dashboard/ceo-chat-panel";
 
 const NAV_ITEMS = [
-  { id: "tickets",  href: "/dashboard/tickets",  label: "Tickets",  glyph: "◆" },
-  { id: "agents",   href: "/dashboard/agents",   label: "Agents",   glyph: "●" },
-  { id: "threads",  href: "/dashboard/threads",  label: "Threads",  glyph: "⇄" },
-  { id: "revenue",  href: "/dashboard/revenue",  label: "Revenue",  glyph: "$" },
+  { id: "tickets",  href: "/dashboard/tickets",   label: "Tickets",  glyph: "◆" },
+  { id: "agents",   href: "/dashboard/agents",    label: "Agents",   glyph: "●" },
+  { id: "ceo-chat", href: "/dashboard/ceo-chat",  label: "CEO Chat", glyph: "✉" },
+  { id: "revenue",  href: "/dashboard/revenue",   label: "Revenue",  glyph: "$" },
 ];
 
 function TopBar({
   paused,
   onPause,
-  onNewCompany,
   onChatCEO,
+  onNewCompany,
 }: {
   paused: boolean;
   onPause: () => void;
-  onNewCompany: () => void;
   onChatCEO: () => void;
+  onNewCompany: () => void;
 }) {
   const live = !paused;
   return (
@@ -236,14 +235,8 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [paused, setPaused] = useState(false);
-  const [chatOpen, setChatOpen] = useState(false);
-  const [chatInitialMessage, setChatInitialMessage] = useState<string | undefined>();
-
-  function openChat(initialMessage?: string) {
-    setChatInitialMessage(initialMessage);
-    setChatOpen(true);
-  }
 
   return (
     <div
@@ -253,12 +246,8 @@ export default function DashboardLayout({
       <TopBar
         paused={paused}
         onPause={() => setPaused((p) => !p)}
-        onChatCEO={() => openChat()}
-        onNewCompany={() =>
-          openChat(
-            "I want to start a new company. Let me describe the idea and let's work through the plan together."
-          )
-        }
+        onChatCEO={() => router.push("/dashboard/ceo-chat")}
+        onNewCompany={() => router.push("/dashboard/ceo-chat")}
       />
       <div className="flex flex-1 overflow-hidden relative">
         <Sidebar pathname={pathname} />
@@ -268,11 +257,6 @@ export default function DashboardLayout({
         >
           {children}
         </div>
-        <CEOChatPanel
-          open={chatOpen}
-          onClose={() => setChatOpen(false)}
-          initialMessage={chatInitialMessage}
-        />
       </div>
     </div>
   );

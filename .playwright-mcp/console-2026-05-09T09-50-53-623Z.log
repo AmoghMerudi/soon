@@ -1,0 +1,84 @@
+[     279ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[     324ms] [LOG] [HMR] connected @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[     824ms] [ERROR] In HTML, %s cannot be a descendant of <%s>.
+This will cause a hydration error.%s <button> button 
+
+  ...
+    <ErrorBoundary errorComponent={undefined} errorStyles={undefined} errorScripts={undefined}>
+      <LoadingBoundary name="ceo-chat/" loading={null}>
+        <HTTPAccessFallbackBoundary notFound={undefined} forbidden={undefined} unauthorized={undefined}>
+          <RedirectBoundary>
+            <RedirectErrorBoundary router={{...}}>
+              <InnerLayoutRouter url="/dashboard..." tree={[...]} params={{}} cacheNode={{rsc:{...}, ...}} ...>
+                <SegmentViewNode type="page" pagePath="dashboard/...">
+                  <SegmentTrieNode>
+                  <ClientPageRoot Component={function CeoChatPage} serverProvidedParams={{...}}>
+                    <CeoChatPage params={Promise} searchParams={Promise}>
+                      <div className="flex flex-...">
+                        <div>
+                        <div className="flex flex-...">
+                          <div className="overflow-y..." style={{width:340, ...}}>
+                            <ThreadItem thread={{...}} active={false} onClick={function onClick} ...>
+>                             <button
+>                               onClick={function onClick}
+>                               className="w-full text-left flex flex-col gap-1.5 cursor-pointer group"
+>                               style={{padding:"14px 16px",background:"transparent",border:"none",borderBottom:"1px solid ...", ...}}
+>                             >
+                                <div className="flex justi...">
+                                  <div>
+                                  <div className="flex items...">
+                                    <span>
+>                                   <button
+>                                     onClick={function onClick}
+>                                     className="opacity-0 group-hover:opacity-100 cursor-pointer"
+>                                     style={{background:"transparent",border:"none",color:"#5E5C56",fontSize:14,padding:"0 2px", ...}}
+>                                   >
+                                ...
+                          ...
+                ...
+              ...
+ @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:3318
+[     824ms] [ERROR] <%s> cannot contain a nested %s.
+See this log for the ancestor stack trace. button <button> @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:3318
+[   52788ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[   52799ms] [LOG] [HMR] connected @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:2477
+[   64427ms] [ERROR] In HTML, %s cannot be a descendant of <%s>.
+This will cause a hydration error.%s <button> button 
+
+  ...
+    <ErrorBoundary errorComponent={undefined} errorStyles={undefined} errorScripts={undefined}>
+      <LoadingBoundary name="ceo-chat/" loading={null}>
+        <HTTPAccessFallbackBoundary notFound={undefined} forbidden={undefined} unauthorized={undefined}>
+          <RedirectBoundary>
+            <RedirectErrorBoundary router={{...}}>
+              <InnerLayoutRouter url="/dashboard..." tree={[...]} params={{}} cacheNode={{rsc:<Fragment>, ...}} ...>
+                <SegmentViewNode type="page" pagePath="dashboard/...">
+                  <SegmentTrieNode>
+                  <ClientPageRoot Component={function CeoChatPage} serverProvidedParams={{...}}>
+                    <CeoChatPage params={Promise} searchParams={Promise}>
+                      <div className="flex flex-...">
+                        <div>
+                        <div className="flex flex-...">
+                          <div className="overflow-y..." style={{width:340, ...}}>
+                            <ThreadItem thread={{...}} active={false} onClick={function onClick} ...>
+>                             <button
+>                               onClick={function onClick}
+>                               className="w-full text-left flex flex-col gap-1.5 cursor-pointer group"
+>                               style={{padding:"14px 16px",background:"transparent",border:"none",borderBottom:"1px solid ...", ...}}
+>                             >
+                                <div className="flex justi...">
+                                  <div>
+                                  <div className="flex items...">
+                                    <span>
+>                                   <button
+>                                     onClick={function onClick}
+>                                     className="opacity-0 group-hover:opacity-100 cursor-pointer"
+>                                     style={{background:"transparent",border:"none",color:"#5E5C56",fontSize:14,padding:"0 2px", ...}}
+>                                   >
+                                ...
+                          ...
+                ...
+              ...
+ @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:3318
+[   64427ms] [ERROR] <%s> cannot contain a nested %s.
+See this log for the ancestor stack trace. button <button> @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_115brz8._.js:3318
