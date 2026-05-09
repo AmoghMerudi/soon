@@ -229,6 +229,21 @@ async function saveStripeApiKeyStep(input: {
   await convex.mutation(api.projects.setStripeApiKey, {
     projectId: input.projectId as Id<"projects">,
     apiKey,
+  });
+
+  await convex.mutation(api.mutations.logAgentAction, {
+    agent: "CEO",
+    action: "save_stripe_key",
+    details: `Saved Stripe API key (${apiKey.startsWith("sk_live_") ? "live" : "test"} mode)`,
+    projectId: input.projectId as Id<"projects">,
+  });
+
+  return {
+    ok: true,
+    mode: apiKey.startsWith("sk_live_") ? "live" : "test",
+  };
+}
+
 async function storeGithubRepoStep(input: {
   projectId: string;
   repoUrl: string;
@@ -245,15 +260,6 @@ async function storeGithubRepoStep(input: {
 
   await convex.mutation(api.mutations.logAgentAction, {
     agent: "CEO",
-    action: "save_stripe_key",
-    details: `Saved Stripe API key (${apiKey.startsWith("sk_live_") ? "live" : "test"} mode)`,
-    projectId: input.projectId as Id<"projects">,
-  });
-
-  return {
-    ok: true,
-    mode: apiKey.startsWith("sk_live_") ? "live" : "test",
-  };
     action: "github_repo_created",
     details: `GitHub repo created: ${input.owner}/${input.repoName} — ${input.repoUrl}`,
     projectId: input.projectId as Id<"projects">,

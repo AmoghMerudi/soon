@@ -9,8 +9,6 @@ export default defineSchema({
     githubOwner: v.optional(v.string()),
     stripeApiKey: v.optional(v.string()),
     createdAt: v.number(),
-    githubRepo: v.optional(v.string()),
-    githubOwner: v.optional(v.string()),
   }).index("by_createdAt", ["createdAt"]),
 
   tickets: defineTable({
@@ -39,8 +37,6 @@ export default defineSchema({
     blockedAt: v.optional(v.number()),
     blockedReason: v.optional(v.string()),
     escalatedTo: v.optional(v.string()),
-    dispatchStatus: v.optional(v.string()),
-    workflowRunId: v.optional(v.string()),
     workflowRunId: v.optional(v.string()),
     dispatchStatus: v.optional(
       v.union(
