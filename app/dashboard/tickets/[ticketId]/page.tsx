@@ -6,8 +6,17 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { STATUS, ROLES } from "@/lib/dashboard/constants";
-import type { StatusKey, PriorityKey, RoleKey } from "@/lib/dashboard/constants";
-import { StatusPill, PriorityTag, Avatar, Eyebrow } from "@/lib/dashboard/primitives";
+import type {
+  StatusKey,
+  PriorityKey,
+  RoleKey,
+} from "@/lib/dashboard/constants";
+import {
+  StatusPill,
+  PriorityTag,
+  Avatar,
+  Eyebrow,
+} from "@/lib/dashboard/primitives";
 
 function timeAgo(ts: number) {
   const diff = Date.now() - ts;
@@ -36,7 +45,10 @@ function ActivityEntry({ item }: { item: ActivityItem }) {
   return (
     <div className="flex gap-3" style={{ padding: "0 0 0 1px" }}>
       {/* Timeline dot + line */}
-      <div className="flex flex-col items-center shrink-0" style={{ width: 24 }}>
+      <div
+        className="flex flex-col items-center shrink-0"
+        style={{ width: 24 }}
+      >
         {isComment ? (
           <Avatar role={roleKey} size={24} />
         ) : (
@@ -264,7 +276,10 @@ export default function TicketDetailPage() {
           >
             <span style={{ fontSize: 11 }}>←</span> Tickets
           </button>
-          <span className="font-mono" style={{ color: "#3D3B36", fontSize: 13 }}>
+          <span
+            className="font-mono"
+            style={{ color: "#3D3B36", fontSize: 13 }}
+          >
             /
           </span>
           <span
@@ -277,7 +292,7 @@ export default function TicketDetailPage() {
 
         {/* Scrollable body */}
         <div
-          className="flex-1 overflow-y-auto"
+          className="flex-1 overflow-y-auto max-w-4xl mx-auto "
           style={{ padding: "28px 28px 0" }}
         >
           {/* Title */}
@@ -326,7 +341,11 @@ export default function TicketDetailPage() {
             </span>
             <span
               className="font-mono"
-              style={{ fontSize: 11, color: "#5E5C56", letterSpacing: "0.06em" }}
+              style={{
+                fontSize: 11,
+                color: "#5E5C56",
+                letterSpacing: "0.06em",
+              }}
             >
               {activity.length} events
             </span>
@@ -347,7 +366,10 @@ export default function TicketDetailPage() {
               </div>
             ) : (
               activity.map((item, i) => (
-                <ActivityEntry key={`${item.kind}-${item.time}-${i}`} item={item} />
+                <ActivityEntry
+                  key={`${item.kind}-${item.time}-${i}`}
+                  item={item}
+                />
               ))
             )}
             <div ref={feedEndRef} />
@@ -406,8 +428,7 @@ export default function TicketDetailPage() {
                 border: "none",
                 background:
                   commentText.trim() && !sending ? "#F2C744" : "#26241F",
-                color:
-                  commentText.trim() && !sending ? "#1A1404" : "#5E5C56",
+                color: commentText.trim() && !sending ? "#1A1404" : "#5E5C56",
                 fontSize: 14,
                 display: "flex",
                 alignItems: "center",
