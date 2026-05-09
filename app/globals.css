@@ -1,13 +1,37 @@
 @import "tailwindcss";
 
 :root {
-  --background: #0a0a0a;
-  --foreground: #ededed;
-  --sidebar-background: #111111;
-  --card-background: #1a1a1a;
-  --border: #2a2a2a;
-  --muted: #888888;
-  --accent: #8b5cf6;
+  --brand-ink: #0A0A0A;
+  --brand-paper: #FAFAF7;
+  --brand-signal: #F2C744;
+  --brand-signal-ink: #1A1404;
+
+  --grey-0: #FAFAF7;
+  --grey-50: #F4F3EE;
+  --grey-100: #ECEAE3;
+  --grey-200: #DCD9CF;
+  --grey-300: #BFBCB1;
+  --grey-400: #8E8B82;
+  --grey-500: #5E5C56;
+  --grey-600: #3D3B36;
+  --grey-700: #26241F;
+  --grey-800: #161410;
+  --grey-900: #0A0A0A;
+
+  --background: #0A0A0A;
+  --foreground: #FAFAF7;
+  --sidebar-background: #0F0E0C;
+  --card-background: #1A1815;
+  --border: #26241F;
+  --border-strong: #3D3B36;
+  --muted: #8E8B82;
+  --muted-light: #BFBCB1;
+  --accent: #F2C744;
+
+  --shadow-2: 0 1px 2px 0 rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.04);
+  --shadow-3: 0 8px 24px -8px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.06);
+
+  --ease-snap: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 @theme inline {
@@ -25,5 +49,11 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
 }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+.pulse { animation: pulse 1.6s ease-in-out infinite; }
