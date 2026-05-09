@@ -2,7 +2,14 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
 export default defineSchema({
+  projects: defineTable({
+    name: v.string(),
+    description: v.optional(v.string()),
+    createdAt: v.number(),
+  }).index("by_createdAt", ["createdAt"]),
+
   tickets: defineTable({
+    projectId: v.optional(v.id("projects")),
     title: v.string(),
     description: v.string(),
     status: v.union(
@@ -30,15 +37,21 @@ export default defineSchema({
   })
     .index("by_status", ["status"])
     .index("by_assignee", ["assignee"])
-    .index("by_parent", ["parentTicket"]),
+    .index("by_parent", ["parentTicket"])
+    .index("by_project_status", ["projectId", "status"])
+    .index("by_project_assignee", ["projectId", "assignee"]),
 
   comments: defineTable({
+    projectId: v.optional(v.id("projects")),
     ticketId: v.id("tickets"),
     author: v.string(),
     content: v.string(),
-  }).index("by_ticket", ["ticketId"]),
+  })
+    .index("by_ticket", ["ticketId"])
+    .index("by_project_ticket", ["projectId", "ticketId"]),
 
   artifacts: defineTable({
+    projectId: v.optional(v.id("projects")),
     ticketId: v.id("tickets"),
     type: v.union(
       v.literal("pr"),
@@ -50,16 +63,22 @@ export default defineSchema({
     ),
     url: v.string(),
     description: v.string(),
-  }).index("by_ticket", ["ticketId"]),
+  })
+    .index("by_ticket", ["ticketId"])
+    .index("by_project_ticket", ["projectId", "ticketId"]),
 
   agentLogs: defineTable({
+    projectId: v.optional(v.id("projects")),
     agent: v.string(),
     action: v.string(),
     details: v.string(),
     ticketId: v.optional(v.id("tickets")),
-  }).index("by_ticket", ["ticketId"]),
+  })
+    .index("by_ticket", ["ticketId"])
+    .index("by_project_ticket", ["projectId", "ticketId"]),
 
   agentMemory: defineTable({
+    projectId: v.optional(v.id("projects")),
     agentId: v.string(),
     memoryType: v.union(
       v.literal("decision"),
@@ -74,7 +93,8 @@ export default defineSchema({
   })
     .index("by_agent", ["agentId"])
     .index("by_type", ["memoryType"])
-    .index("by_ticket", ["ticketId"]),
+    .index("by_ticket", ["ticketId"])
+    .index("by_project_agent", ["projectId", "agentId"]),
 
   agentConfig: defineTable({
     agentId: v.string(),
@@ -109,17 +129,23 @@ export default defineSchema({
     .index("by_active", ["isActive"]),
 
   ceoChatThreads: defineTable({
+    projectId: v.optional(v.id("projects")),
     title: v.string(),
     preview: v.string(),
     createdAt: v.number(),
     updatedAt: v.number(),
-  }).index("by_updated", ["updatedAt"]),
+  })
+    .index("by_updated", ["updatedAt"])
+    .index("by_project_updated", ["projectId", "updatedAt"]),
 
   ceoChatMessages: defineTable({
+    projectId: v.optional(v.id("projects")),
     threadId: v.id("ceoChatThreads"),
     messageId: v.string(),
     role: v.string(),
     serialized: v.string(),
     createdAt: v.number(),
-  }).index("by_thread", ["threadId", "createdAt"]),
+  })
+    .index("by_thread", ["threadId", "createdAt"])
+    .index("by_project_thread", ["projectId", "threadId"]),
 });

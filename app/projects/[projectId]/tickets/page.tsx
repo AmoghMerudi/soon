@@ -6,6 +6,7 @@ import { api } from "@/convex/_generated/api";
 import { STATUS, ROLES } from "@/lib/dashboard/constants";
 import type { StatusKey, PriorityKey, RoleKey } from "@/lib/dashboard/constants";
 import { PriorityTag, Avatar, Btn } from "@/lib/dashboard/primitives";
+import { useProjectId } from "@/lib/dashboard/project-context";
 
 interface Ticket {
   _id: string;
@@ -83,7 +84,11 @@ function KanbanColumn({
   status: StatusKey;
   onTicketClick: (t: Ticket) => void;
 }) {
-  const tickets = useQuery(api.queries.getTicketsByStatus, { status });
+  const projectId = useProjectId();
+  const tickets = useQuery(api.queries.getTicketsByStatus, {
+    projectId,
+    status,
+  });
   const isLoading = tickets === undefined;
   const s = STATUS[status];
   return (
@@ -131,6 +136,7 @@ const COLUMNS: StatusKey[] = ["backlog", "in_progress", "in_review", "resolved",
 
 export default function TicketsPage() {
   const router = useRouter();
+  const projectId = useProjectId();
   return (
     <div className="relative h-full">
       <div className="flex justify-between items-baseline" style={{ padding: "20px 24px 0" }}>
@@ -149,7 +155,7 @@ export default function TicketsPage() {
           <KanbanColumn
             key={c}
             status={c}
-            onTicketClick={(t) => router.push(`/dashboard/tickets/${t._id}`)}
+            onTicketClick={(t) => router.push(`/projects/${projectId}/tickets/${t._id}`)}
           />
         ))}
       </div>
