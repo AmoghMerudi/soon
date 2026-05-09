@@ -247,105 +247,15 @@ Real-time UI powered by Convex subscriptions. This is the **judge demo view**.
 
 ## 10. Build Phases
 
-### Phase 1: Foundation (Hours 0-3) — "One agent talks to Convex"
+Each phase has a detailed plan in `docs/`. Do not proceed to the next phase until the current phase's gate passes.
 
-The goal is a single working loop: CEO Agent receives a business idea, creates tickets in Convex, and those tickets appear on a dashboard in real-time.
-
-**Person A: Convex + Agent Framework**
-| Hour | Task |
-|------|------|
-| 0-1 | Convex project setup: schema (tickets, comments, artifacts, agentLogs), CRUD mutations, queries with real-time subscriptions |
-| 1-2 | Base agent framework: reusable `runAgent(role, systemPrompt, tools)` function using AI SDK `generateText` + `maxSteps` tool loop |
-| 2-3 | Wire Composio SDK into agent framework: tool discovery, execution, auth flow |
-
-**Person B: Dashboard Shell**
-| Hour | Task |
-|------|------|
-| 0-1 | Convex client setup in Next.js, dashboard layout with sidebar nav |
-| 1-2 | Ticket kanban board: columns for each status, real-time Convex subscription, ticket cards |
-| 2-3 | Activity feed: chronological log of agent actions from `agentLogs` table |
-
-**Phase 1 Gate:** CEO agent endpoint exists. You can POST a business idea to `/api/agents/ceo`, it creates tickets in Convex, and they appear on the dashboard kanban in real-time.
-
----
-
-### Phase 2: CEO + Developer Loop (Hours 3-6) — "Two agents collaborate"
-
-The goal is the core feedback loop: CEO creates engineering tickets → Developer picks them up → Developer resolves → CEO gets notified and reviews.
-
-**Person A: CEO + Developer Agents**
-| Hour | Task |
-|------|------|
-| 3-4 | CEO Agent: system prompt, business planning logic, ticket creation with proper tags/assignees/acceptance criteria, review behavior |
-| 4-5 | Developer Agent: system prompt, E2B sandbox integration (code execution), GitHub tools via Composio (push, PR) |
-| 5-6 | Agent trigger system: Convex mutation → HTTP call to agent endpoint on ticket assignment/status change. CEO re-activates on ticket resolution. |
-
-**Person B: Dashboard Interactivity**
-| Hour | Task |
-|------|------|
-| 3-4 | "New Company" flow: input modal → POST to CEO endpoint → watch tickets populate |
-| 4-5 | Agent status board: show each agent's state (idle/active/blocked), current ticket, last action |
-| 5-6 | Ticket detail view: description, comments thread, artifacts list, status controls |
-
-**Phase 2 Gate:** Enter a business idea → CEO creates tickets → Developer picks up an engineering ticket → writes code in E2B → pushes to GitHub → resolves ticket → CEO is notified and reviews. Full loop visible on dashboard.
-
----
-
-### Phase 3: All Agents + Controls (Hours 6-8) — "The full company"
-
-Add Designer and Marketing agents. Add human controls for the dashboard.
-
-**Person A: Designer + Marketing Agents**
-| Hour | Task |
-|------|------|
-| 6-7 | Designer Agent: system prompt, Google AI Studio integration (image gen), Cloudinary via Composio (image processing) |
-| 7-8 | Marketing Agent: system prompt, Twitter/X + LinkedIn + Email tools via Composio |
-
-**Person B: System Controls + Revenue**
-| Hour | Task |
-|------|------|
-| 6-7 | System controls: pause/resume individual agents, manual ticket injection, kill switch |
-| 7-8 | Revenue tracker: Stripe integration via Composio, live revenue display on dashboard |
-
-**Phase 3 Gate:** All 4 agents operational. CEO delegates across engineering, design, and marketing. Dashboard shows all agents working, with system controls functional.
-
----
-
-### Phase 4: Polish + Deploy (Hours 8-10) — "Demo-ready"
-
-Harden everything, build the landing page, deploy, and run the first business.
-
-**Person A: Safety + Triggers**
-| Hour | Task |
-|------|------|
-| 8-9 | Safety rails: circuit breaker, max ticket depth, max active tickets, blocked escalation |
-| 9-10 | Cron job for CEO periodic review, Vercel deployment config, environment variables |
-
-**Person B: Landing Page + Polish**
-| Hour | Task |
-|------|------|
-| 8-9 | Landing page: explain 0to1, show architecture diagram, CTA to dashboard |
-| 9-10 | Polish: loading states, error handling, empty states, responsive layout |
-
-**Joint (Hour 10):**
-- Integration test: full end-to-end flow
-- Deploy to Vercel production
-- Feed it "Children's picture book company" → agents start operating
-
-**Phase 4 Gate:** System deployed to production. Enter a business idea → 4 agents autonomously plan, build, and begin operating a company. Dashboard shows everything in real-time. Ready for judges.
-
----
-
-### Phase 5: Operate (Hours 10-36) — "Run the business"
-
-The system is live. Agents operate the children's picture book company autonomously. Humans monitor via dashboard and intervene only if needed.
-
-- CEO Agent iterates on strategy based on revenue data
-- Developer Agent fixes bugs, ships features as CEO requests
-- Designer Agent creates new assets, illustrations
-- Marketing Agent posts content, runs campaigns
-- Real Stripe revenue coming in
-- Prepare demo script and presentation
+| Phase | Hours | Goal | Details |
+|-------|-------|------|---------|
+| [Phase 1: Foundation](docs/phase1-foundation.md) | 0-3 | One agent talks to Convex | Convex schema, agent framework, dashboard shell |
+| [Phase 2: CEO + Dev Loop](docs/phase2-ceo-developer-loop.md) | 3-6 | Two agents collaborate | CEO ↔ Developer feedback loop, triggers, dashboard interactivity |
+| [Phase 3: All Agents](docs/phase3-all-agents.md) | 6-8 | The full company | Designer + Marketing agents, system controls, revenue tracker |
+| [Phase 4: Polish + Deploy](docs/phase4-polish-deploy.md) | 8-10 | Demo-ready | Safety rails, cron, landing page, deploy to production |
+| [Phase 5: Operate](docs/phase5-operate.md) | 10-36 | Run the business | Agents operate autonomously, generate real Stripe revenue |
 
 ---
 
