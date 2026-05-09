@@ -6,6 +6,8 @@ export default defineSchema({
     name: v.string(),
     description: v.optional(v.string()),
     createdAt: v.number(),
+    githubRepo: v.optional(v.string()),
+    githubOwner: v.optional(v.string()),
   }).index("by_createdAt", ["createdAt"]),
 
   tickets: defineTable({

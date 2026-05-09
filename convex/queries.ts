@@ -9,6 +9,13 @@ const statusValidator = v.union(
   v.literal("blocked")
 );
 
+export const getProject = query({
+  args: { projectId: v.id("projects") },
+  handler: async (ctx, args) => {
+    return await ctx.db.get(args.projectId);
+  },
+});
+
 export const getTicket = query({
   args: { ticketId: v.id("tickets") },
   handler: async (ctx, args) => {
@@ -34,15 +41,22 @@ export const getTicketsByStatus = query({
 
 export const getTicketsByAssignee = query({
   args: {
-    projectId: v.id("projects"),
+    projectId: v.optional(v.id("projects")),
     assignee: v.string(),
   },
   handler: async (ctx, args) => {
+    if (args.projectId) {
+      return await ctx.db
+        .query("tickets")
+        .withIndex("by_project_assignee", (q) =>
+          q.eq("projectId", args.projectId!).eq("assignee", args.assignee)
+        )
+        .order("asc")
+        .collect();
+    }
     return await ctx.db
       .query("tickets")
-      .withIndex("by_project_assignee", (q) =>
-        q.eq("projectId", args.projectId).eq("assignee", args.assignee)
-      )
+      .withIndex("by_assignee", (q) => q.eq("assignee", args.assignee))
       .order("asc")
       .collect();
   },
@@ -50,14 +64,16 @@ export const getTicketsByAssignee = query({
 
 export const getTicketsByTag = query({
   args: {
-    projectId: v.id("projects"),
+    projectId: v.optional(v.id("projects")),
     tag: v.string(),
   },
   handler: async (ctx, args) => {
-    const all = await ctx.db
-      .query("tickets")
-      .withIndex("by_project_status", (q) => q.eq("projectId", args.projectId))
-      .collect();
+    const all = args.projectId
+      ? await ctx.db
+          .query("tickets")
+          .withIndex("by_project_status", (q) => q.eq("projectId", args.projectId!))
+          .collect()
+      : await ctx.db.query("tickets").collect();
     return all.filter((t) => t.tags.includes(args.tag));
   },
 });

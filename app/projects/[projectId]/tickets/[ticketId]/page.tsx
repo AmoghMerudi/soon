@@ -17,6 +17,8 @@ import {
   Avatar,
   Eyebrow,
 } from "@/lib/dashboard/primitives";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 function timeAgo(ts: number) {
   const diff = Math.max(0, Date.now() - ts);
@@ -173,17 +175,17 @@ function ActivityEntry({ item }: { item: ActivityItem }) {
               </span>
             </div>
             <div
+              className="prose prose-invert prose-sm max-w-none"
               style={{
                 background: "#1A1815",
                 border: "1px solid #26241F",
                 borderRadius: 10,
                 padding: "10px 14px",
-                fontSize: 14,
-                lineHeight: 1.55,
-                color: "#E8E5DC",
               }}
             >
-              {item.content}
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                {item.content}
+              </ReactMarkdown>
             </div>
           </>
         ) : isStep ? (
@@ -261,16 +263,12 @@ function ActivityEntry({ item }: { item: ActivityItem }) {
                 Input
               </summary>
               <div
-                className="font-mono"
-                style={{
-                  marginTop: 8,
-                  fontSize: 12,
-                  lineHeight: 1.55,
-                  color: "#E8E5DC",
-                  wordBreak: "break-word",
-                }}
+                className="prose prose-invert prose-xs max-w-none mt-2"
+                style={{ fontSize: 12, wordBreak: "break-word" }}
               >
-                {item.inputSummary}
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  {item.inputSummary}
+                </ReactMarkdown>
               </div>
             </details>
 
@@ -296,16 +294,12 @@ function ActivityEntry({ item }: { item: ActivityItem }) {
                   {item.error ? "Error" : "Output"}
                 </summary>
                 <div
-                  className="font-mono"
-                  style={{
-                    marginTop: 8,
-                    fontSize: 12,
-                    lineHeight: 1.55,
-                    color: item.error ? "#F0A097" : "#E8E5DC",
-                    wordBreak: "break-word",
-                  }}
+                  className="prose prose-invert prose-xs max-w-none mt-2"
+                  style={{ fontSize: 12, wordBreak: "break-word", color: item.error ? "#F0A097" : undefined }}
                 >
-                  {item.error ?? item.outputSummary}
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {item.error ?? item.outputSummary ?? ""}
+                  </ReactMarkdown>
                 </div>
               </details>
             )}
@@ -697,18 +691,11 @@ export default function TicketDetailPage() {
           </h1>
 
           {/* Description */}
-          <p
-            className="font-sans"
-            style={{
-              fontSize: 15,
-              color: "#BFBCB1",
-              lineHeight: 1.6,
-              marginTop: 14,
-              marginBottom: 0,
-            }}
-          >
-            {ticket.description}
-          </p>
+          <div className="prose prose-invert prose-sm max-w-none mt-3.5 prose-p:text-[#BFBCB1] prose-headings:text-[#FAFAF7] prose-code:text-[#E8E5DC] prose-pre:bg-[#0F0E0C] prose-pre:border prose-pre:border-[#26241F] prose-a:text-[#F2C744] prose-blockquote:border-[#5E5C56] prose-hr:border-[#26241F]">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              {ticket.description}
+            </ReactMarkdown>
+          </div>
 
           {/* Divider */}
           <div

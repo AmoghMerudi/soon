@@ -25,6 +25,7 @@ async function createTicketStep(input: {
   tags: string[];
   assignee: string | null;
   taggedAgents: string[];
+  projectId?: string;
 }) {
   "use step";
 
@@ -37,6 +38,7 @@ async function createTicketStep(input: {
     assignee: input.assignee,
     createdBy: "CMO",
     taggedAgents: input.taggedAgents,
+    ...(input.projectId ? { projectId: input.projectId as any } : {}),
   });
 
   await convex.mutation(api.mutations.logAgentAction, {
@@ -168,7 +170,8 @@ async function loadSkillStep(input: { name: string }) {
 
 // --- Tool definitions for DurableAgent ---
 
-export const cmoTools = {
+export function buildCmoTools(projectId?: string) {
+  return {
   getTicketDetails: {
     description:
       "Fetch full ticket context including description, parent ticket, sub-tickets, comments, and artifacts. Always call this first when assigned a ticket.",
@@ -201,7 +204,8 @@ export const cmoTools = {
         .array(z.string())
         .describe("Agents to notify — always include CMO"),
     }),
-    execute: createTicketStep,
+    execute: (input: Parameters<typeof createTicketStep>[0]) =>
+      createTicketStep({ ...input, projectId }),
   },
 
   assignTicket: {
@@ -293,4 +297,5 @@ export const cmoTools = {
   },
 
   exaSearch: exaSearchDurableTool,
-};
+  };
+}

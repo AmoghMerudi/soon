@@ -211,6 +211,30 @@ async function loadSkillStep(input: { name: string }) {
   return { name: input.name, instructions: content };
 }
 
+async function storeGithubRepoStep(input: {
+  projectId: string;
+  repoUrl: string;
+  repoName: string;
+  owner: string;
+}) {
+  "use step";
+
+  await convex.mutation(api.mutations.updateProject, {
+    projectId: input.projectId as Id<"projects">,
+    githubRepo: input.repoUrl,
+    githubOwner: input.owner,
+  });
+
+  await convex.mutation(api.mutations.logAgentAction, {
+    agent: "CEO",
+    action: "github_repo_created",
+    details: `GitHub repo created: ${input.owner}/${input.repoName} — ${input.repoUrl}`,
+    projectId: input.projectId as Id<"projects">,
+  });
+
+  return { repoUrl: input.repoUrl, owner: input.owner, repoName: input.repoName };
+}
+
 async function writeQuestionToStream(
   toolCallId: string,
   question: string,
@@ -401,6 +425,18 @@ export function buildCeoTools(projectId: Id<"projects">): ToolSet {
           ),
       }),
       execute: askQuestionExecute,
+    },
+
+    storeGithubRepo: {
+      description:
+        "After creating a GitHub repo via GITHUB_CREATE_REPO, call this to persist the repo URL and owner to the project record so the Developer agent can clone it. Must be called immediately after repo creation.",
+      inputSchema: z.object({
+        repoUrl: z.string().describe("Full HTTPS clone URL, e.g. https://github.com/owner/repo"),
+        repoName: z.string().describe("Repository name (slug only, no owner)"),
+        owner: z.string().describe("GitHub username or org that owns the repo"),
+      }),
+      execute: (input: Omit<Parameters<typeof storeGithubRepoStep>[0], "projectId">) =>
+        storeGithubRepoStep({ ...input, projectId: pid }),
     },
 
     exaSearch: exaSearchDurableTool,

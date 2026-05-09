@@ -3,7 +3,7 @@ import { openai } from "@workflow/ai/openai";
 import { getWritable, getWorkflowMetadata } from "workflow";
 import { stepCountIs } from "ai";
 import type { UIMessageChunk } from "ai";
-import { cmoTools } from "./tools";
+import { buildCmoTools } from "./tools";
 import { buildSkillsPrompt } from "./skills";
 import { getComposioDurableTools } from "../composio-durable-tools";
 import {
@@ -55,7 +55,7 @@ You delegate to Designer and Marketing only — never directly manage Engineerin
 
 const CMO_COMPOSIO_TOOLKITS = ["googleanalytics", "slack"];
 
-export async function cmoWorkflow(ticketId: string) {
+export async function cmoWorkflow(ticketId: string, projectId?: string) {
   "use workflow";
 
   try {
@@ -64,9 +64,10 @@ export async function cmoWorkflow(ticketId: string) {
       userId: "default",
       toolkits: CMO_COMPOSIO_TOOLKITS,
     });
+    const baseTools = buildCmoTools(projectId);
     const allTools = composioResult.tools
-      ? { ...cmoTools, ...composioResult.tools }
-      : cmoTools;
+      ? { ...baseTools, ...composioResult.tools }
+      : baseTools;
     const observedTools = createObservedTools(allTools, {
       ticketId,
       workflowRunId,
