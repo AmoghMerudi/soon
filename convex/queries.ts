@@ -42,6 +42,14 @@ export const getTicketsByAssignee = query({
   },
 });
 
+export const getTicketsByTag = query({
+  args: { tag: v.string() },
+  handler: async (ctx, args) => {
+    const all = await ctx.db.query("tickets").collect();
+    return all.filter((t) => t.tags.includes(args.tag));
+  },
+});
+
 export const getTicketComments = query({
   args: {
     ticketId: v.id("tickets"),
@@ -64,6 +72,38 @@ export const getTicketArtifacts = query({
       .query("artifacts")
       .withIndex("by_ticket", (q) => q.eq("ticketId", args.ticketId))
       .collect();
+  },
+});
+
+export const getTicketDetails = query({
+  args: { ticketId: v.id("tickets") },
+  handler: async (ctx, args) => {
+    const ticket = await ctx.db.get(args.ticketId);
+    if (!ticket) return null;
+
+    const [parent, subtickets, comments, artifacts, logs] = await Promise.all([
+      ticket.parentTicket ? ctx.db.get(ticket.parentTicket) : Promise.resolve(null),
+      ctx.db
+        .query("tickets")
+        .withIndex("by_parent", (q) => q.eq("parentTicket", args.ticketId))
+        .collect(),
+      ctx.db
+        .query("comments")
+        .withIndex("by_ticket", (q) => q.eq("ticketId", args.ticketId))
+        .order("asc")
+        .collect(),
+      ctx.db
+        .query("artifacts")
+        .withIndex("by_ticket", (q) => q.eq("ticketId", args.ticketId))
+        .collect(),
+      ctx.db
+        .query("agentLogs")
+        .withIndex("by_ticket", (q) => q.eq("ticketId", args.ticketId))
+        .order("desc")
+        .collect(),
+    ]);
+
+    return { ticket, parent, subtickets, comments, artifacts, logs };
   },
 });
 
