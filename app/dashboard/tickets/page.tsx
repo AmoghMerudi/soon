@@ -1,114 +1,60 @@
 "use client";
 
+import { useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-type Status = "backlog" | "in_progress" | "in_review" | "resolved" | "blocked";
-type Priority = "critical" | "high" | "medium" | "low";
+import { STATUS, ROLES } from "@/lib/dashboard/constants";
+import type { StatusKey, PriorityKey, RoleKey } from "@/lib/dashboard/constants";
+import { StatusPill, PriorityTag, Avatar, Btn, Eyebrow } from "@/lib/dashboard/primitives";
 
 interface Ticket {
   _id: string;
+  _creationTime: number;
   title: string;
   description: string;
-  status: Status;
-  priority: Priority;
+  status: StatusKey;
+  priority: PriorityKey;
   assignee: string | null;
   tags: string[];
   createdBy: string;
   taggedAgents: string[];
 }
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-const PRIORITY_COLORS: Record<Priority, string> = {
-  critical: "#ef4444",
-  high: "#f97316",
-  medium: "#eab308",
-  low: "#22c55e",
-};
-
-const PRIORITY_BG: Record<Priority, string> = {
-  critical: "rgba(239,68,68,0.15)",
-  high: "rgba(249,115,22,0.15)",
-  medium: "rgba(234,179,8,0.15)",
-  low: "rgba(34,197,94,0.15)",
-};
-
-const COLUMNS: { status: Status; label: string; color: string }[] = [
-  { status: "backlog", label: "Backlog", color: "#6b7280" },
-  { status: "in_progress", label: "In Progress", color: "#3b82f6" },
-  { status: "in_review", label: "In Review", color: "#a855f7" },
-  { status: "resolved", label: "Resolved", color: "#22c55e" },
-  { status: "blocked", label: "Blocked", color: "#ef4444" },
-];
-
-// ─── Sub-components ───────────────────────────────────────────────────────────
-
-function PriorityBadge({ priority }: { priority: Priority }) {
-  return (
-    <span
-      className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold capitalize"
-      style={{
-        color: PRIORITY_COLORS[priority],
-        backgroundColor: PRIORITY_BG[priority],
-      }}
-    >
-      {priority}
-    </span>
-  );
-}
-
-function Tag({ label }: { label: string }) {
-  return (
-    <span
-      className="inline-flex items-center px-2 py-0.5 rounded-full text-xs"
-      style={{
-        backgroundColor: "rgba(139,92,246,0.15)",
-        color: "#a78bfa",
-      }}
-    >
-      {label}
-    </span>
-  );
-}
-
-function TicketCard({ ticket }: { ticket: Ticket }) {
+function TicketCard({ ticket, onClick }: { ticket: Ticket; onClick: () => void }) {
+  const roleKey = (ticket.assignee?.toLowerCase() ?? "ceo") as RoleKey;
+  const role = ROLES[roleKey] ?? ROLES.ceo;
   return (
     <div
-      className="rounded-lg p-3 flex flex-col gap-2"
+      onClick={onClick}
+      className="cursor-pointer"
       style={{
-        backgroundColor: "var(--card-background)",
-        border: "1px solid var(--border)",
+        background: "#1A1815",
+        border: "1px solid #26241F",
+        borderLeft: `3px solid ${role.color}`,
+        padding: "10px 12px",
+        borderRadius: 8,
+        transition: "box-shadow 160ms",
       }}
     >
-      {/* Title + Priority */}
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-sm font-semibold leading-snug" style={{ color: "var(--foreground)" }}>
-          {ticket.title}
-        </p>
-        <PriorityBadge priority={ticket.priority} />
-      </div>
-
-      {/* Tags */}
-      {ticket.tags.length > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {ticket.tags.map((tag) => (
-            <Tag key={tag} label={tag} />
-          ))}
-        </div>
-      )}
-
-      {/* Footer: assignee + created by */}
-      <div className="flex items-center justify-between text-xs gap-2 mt-1">
-        <span
-          style={{ color: ticket.assignee ? "var(--foreground)" : "var(--muted)" }}
-        >
-          {ticket.assignee ?? "Unassigned"}
+      <div className="flex justify-between items-baseline mb-1.5">
+        <span className="font-mono text-sm" style={{ color: "#8E8B82" }}>
+          {ticket._id.slice(-8).toUpperCase()}
         </span>
-        <span style={{ color: "var(--muted)" }} className="truncate text-right">
-          by {ticket.createdBy}
+        <PriorityTag priority={ticket.priority} />
+      </div>
+      <div
+        className="font-sans font-medium"
+        style={{ fontSize: 14, color: "#FAFAF7", lineHeight: 1.35, letterSpacing: "-0.003em" }}
+      >
+        {ticket.title}
+      </div>
+      <div className="flex justify-between items-center mt-2.5 gap-2">
+        <span className="inline-flex items-center gap-1.5 font-sans text-xs" style={{ color: "#BFBCB1" }}>
+          <Avatar role={roleKey} size={16} />
+          {role.label}
+        </span>
+        <span className="font-mono text-xs" style={{ color: "#8E8B82" }}>
+          {ticket.tags.slice(0, 2).join(" · ")}
         </span>
       </div>
     </div>
@@ -118,85 +64,62 @@ function TicketCard({ ticket }: { ticket: Ticket }) {
 function SkeletonCard() {
   return (
     <div
-      className="rounded-lg p-3 flex flex-col gap-2 animate-pulse"
+      className="animate-pulse"
       style={{
-        backgroundColor: "var(--card-background)",
-        border: "1px solid var(--border)",
+        background: "#1A1815",
+        border: "1px solid #26241F",
+        padding: "10px 12px",
+        borderRadius: 8,
+        height: 80,
       }}
-    >
-      <div className="flex justify-between gap-2">
-        <div className="h-4 rounded w-3/4" style={{ backgroundColor: "var(--border)" }} />
-        <div className="h-4 rounded w-14" style={{ backgroundColor: "var(--border)" }} />
-      </div>
-      <div className="h-3 rounded w-1/2" style={{ backgroundColor: "var(--border)" }} />
-      <div className="h-3 rounded w-1/3" style={{ backgroundColor: "var(--border)" }} />
-    </div>
+    />
   );
 }
 
 function KanbanColumn({
   status,
-  label,
-  color,
+  onTicketClick,
 }: {
-  status: Status;
-  label: string;
-  color: string;
+  status: StatusKey;
+  onTicketClick: (t: Ticket) => void;
 }) {
   const tickets = useQuery(api.queries.getTicketsByStatus, { status });
   const isLoading = tickets === undefined;
-
+  const s = STATUS[status];
   return (
-    <div
-      className="flex flex-col rounded-xl shrink-0 w-72"
-      style={{
-        backgroundColor: "rgba(255,255,255,0.03)",
-        border: "1px solid var(--border)",
-      }}
-    >
-      {/* Column header */}
-      <div
-        className="flex items-center justify-between px-3 py-2.5 rounded-t-xl border-b"
-        style={{ borderColor: "var(--border)" }}
-      >
-        <div className="flex items-center gap-2">
-          <span
-            className="w-2.5 h-2.5 rounded-full shrink-0"
-            style={{ backgroundColor: color }}
-          />
-          <span className="text-sm font-semibold" style={{ color: "var(--foreground)" }}>
-            {label}
-          </span>
-        </div>
+    <div className="flex-1 min-w-0 flex flex-col gap-2.5">
+      <div className="flex items-center justify-between px-1 gap-1.5">
         <span
-          className="text-xs font-medium px-2 py-0.5 rounded-full"
-          style={{
-            backgroundColor: isLoading ? "var(--border)" : `${color}22`,
-            color: isLoading ? "var(--muted)" : color,
-            minWidth: "1.5rem",
-            textAlign: "center",
-          }}
+          className="inline-flex items-center gap-2 font-mono font-semibold uppercase whitespace-nowrap"
+          style={{ fontSize: 13, letterSpacing: "0.12em", color: "#FAFAF7" }}
         >
+          <span className="rounded-full" style={{ width: 8, height: 8, background: s.dot }} />
+          {s.label}
+        </span>
+        <span className="font-mono text-sm" style={{ color: "#8E8B82" }}>
           {isLoading ? "—" : tickets.length}
         </span>
       </div>
-
-      {/* Cards */}
-      <div className="flex flex-col gap-2 p-2 flex-1 overflow-y-auto" style={{ minHeight: "4rem" }}>
+      <div
+        className="flex flex-col gap-2 p-2 rounded-lg"
+        style={{ background: "#1A1815", minHeight: 200 }}
+      >
         {isLoading ? (
           <>
             <SkeletonCard />
             <SkeletonCard />
           </>
         ) : tickets.length === 0 ? (
-          <div className="flex items-center justify-center py-8">
-            <span className="text-xs" style={{ color: "var(--muted)" }}>
-              No tickets
-            </span>
+          <div className="font-mono text-center py-6" style={{ fontSize: 14, color: "#8E8B82" }}>
+            —
           </div>
         ) : (
-          tickets.map((ticket) => (
-            <TicketCard key={ticket._id} ticket={ticket as Ticket} />
+          tickets.map((t) => (
+            <TicketCard
+              key={t._id}
+              ticket={t as Ticket}
+              onClick={() => onTicketClick(t as Ticket)}
+            />
           ))
         )}
       </div>
@@ -204,27 +127,137 @@ function KanbanColumn({
   );
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
+function TicketDrawer({
+  ticket,
+  onClose,
+}: {
+  ticket: Ticket | null;
+  onClose: () => void;
+}) {
+  if (!ticket) return null;
+  const roleKey = (ticket.assignee?.toLowerCase() ?? "ceo") as RoleKey;
+  const role = ROLES[roleKey] ?? ROLES.ceo;
+  return (
+    <div
+      className="absolute top-0 right-0 bottom-0 flex flex-col"
+      style={{
+        width: 420,
+        background: "#1A1815",
+        borderLeft: "1px solid #26241F",
+        boxShadow: "var(--shadow-3)",
+        zIndex: 5,
+      }}
+    >
+      {/* Header */}
+      <div
+        className="flex items-center justify-between px-5 py-4"
+        style={{ borderBottom: "1px solid #26241F" }}
+      >
+        <div className="flex items-center gap-2.5">
+          <span className="font-mono text-sm" style={{ color: "#8E8B82" }}>
+            {ticket._id.slice(-8).toUpperCase()}
+          </span>
+          <PriorityTag priority={ticket.priority} />
+          <StatusPill status={ticket.status} />
+        </div>
+        <button
+          onClick={onClose}
+          className="font-mono cursor-pointer"
+          style={{ background: "transparent", border: "none", color: "#8E8B82", fontSize: 16 }}
+        >
+          ✕
+        </button>
+      </div>
+
+      {/* Body */}
+      <div className="flex-1 overflow-y-auto p-5">
+        <div
+          className="font-sans font-semibold"
+          style={{ fontSize: 20, color: "#FAFAF7", lineHeight: 1.25, letterSpacing: "-0.015em" }}
+        >
+          {ticket.title}
+        </div>
+        <div
+          className="font-sans"
+          style={{ fontSize: 14, color: "#BFBCB1", lineHeight: 1.55, marginTop: 12 }}
+        >
+          {ticket.description}
+        </div>
+        <div
+          className="flex gap-6 mt-5 pt-4"
+          style={{ borderTop: "1px solid #26241F" }}
+        >
+          <div>
+            <Eyebrow>Assignee</Eyebrow>
+            <div className="flex items-center gap-2 mt-1.5">
+              <Avatar role={roleKey} size={20} />
+              <span className="font-sans font-medium text-sm" style={{ color: "#FAFAF7" }}>
+                {role.label}
+              </span>
+            </div>
+          </div>
+          <div>
+            <Eyebrow>Tags</Eyebrow>
+            <div className="flex gap-1.5 mt-1.5">
+              {ticket.tags.map((tag) => (
+                <span
+                  key={tag}
+                  className="font-mono uppercase"
+                  style={{
+                    fontSize: 11,
+                    padding: "2px 6px",
+                    background: "#1A1815",
+                    color: "#BFBCB1",
+                    borderRadius: 4,
+                    letterSpacing: "0.04em",
+                    border: "1px solid #26241F",
+                  }}
+                >
+                  {tag}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div
+        className="flex gap-2 justify-end px-5 py-3.5"
+        style={{ borderTop: "1px solid #26241F" }}
+      >
+        <Btn kind="ghost" onClick={onClose}>Close</Btn>
+        {ticket.status !== "resolved" && (
+          <Btn kind="signal" onClick={onClose}>Mark resolved</Btn>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const COLUMNS: StatusKey[] = ["backlog", "in_progress", "in_review", "resolved", "blocked"];
 
 export default function TicketsPage() {
+  const [drawer, setDrawer] = useState<Ticket | null>(null);
   return (
-    <div className="flex flex-col gap-6 h-full">
-      {/* Page header */}
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight" style={{ color: "var(--foreground)" }}>
+    <div className="relative h-full">
+      <div className="flex justify-between items-baseline" style={{ padding: "20px 24px 0" }}>
+        <h1
+          className="font-sans font-semibold"
+          style={{ fontSize: 34, letterSpacing: "-0.02em", color: "#FAFAF7", margin: 0 }}
+        >
           Tickets
         </h1>
-        <p className="text-sm mt-1" style={{ color: "var(--muted)" }}>
-          Real-time board — updates automatically as agents work.
-        </p>
+        <div className="flex gap-2">
+          <Btn kind="secondary" icon={<span>+</span>}>Inject ticket</Btn>
+        </div>
       </div>
-
-      {/* Kanban board — horizontal scroll */}
-      <div className="flex gap-4 overflow-x-auto pb-4" style={{ minHeight: 0 }}>
-        {COLUMNS.map(({ status, label, color }) => (
-          <KanbanColumn key={status} status={status} label={label} color={color} />
+      <div className="flex gap-2.5 items-start" style={{ padding: "20px 24px" }}>
+        {COLUMNS.map((c) => (
+          <KanbanColumn key={c} status={c} onTicketClick={setDrawer} />
         ))}
       </div>
+      <TicketDrawer ticket={drawer} onClose={() => setDrawer(null)} />
     </div>
   );
 }
