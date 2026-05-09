@@ -1,16 +1,13 @@
 "use client";
 
-import { useRef, useEffect, useState, useCallback } from "react";
+import { useRef, useEffect, useState, useCallback, useMemo } from "react";
 import { useChat } from "@ai-sdk/react";
-import { DefaultChatTransport } from "ai";
+import type { UIMessage } from "ai";
+import { WorkflowChatTransport } from "@workflow/ai";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { Avatar, Btn, Eyebrow } from "@/lib/dashboard/primitives";
-
-const transport = new DefaultChatTransport({
-  api: "/api/agents/ceo-chat",
-});
 
 function ChatBubble({
   role,
@@ -60,33 +57,264 @@ function ChatBubble({
   );
 }
 
-function ToolCallIndicator({ toolName }: { toolName: string }) {
+function ToolCallIndicator({
+  toolName,
+  input,
+  output,
+}: {
+  toolName: string;
+  input?: Record<string, unknown>;
+  output?: unknown;
+}) {
   const labels: Record<string, string> = {
     createTicket: "Creating ticket",
-    updateTicketStatus: "Updating ticket",
+    assignTicket: "Assigning ticket",
+    updateTicketStatus: "Updating status",
     addComment: "Adding comment",
+    getTicketsByStatus: "Checking pipeline",
+    getTicketsByAssignee: "Checking workload",
+    reviewArtifact: "Reviewing work",
+    createSubTicket: "Creating sub-task",
     listTickets: "Checking tickets",
+    loadSkill: "Activating skill",
+    askQuestion: "Waiting for your answer",
   };
+
+  const done = output !== undefined;
+  const label = labels[toolName] ?? toolName;
+
+  let detail = "";
+  if (toolName === "loadSkill" && input?.name) {
+    detail = String(input.name);
+  } else if (toolName === "createTicket" && input?.title) {
+    detail = String(input.title);
+  } else if (toolName === "createSubTicket" && input?.title) {
+    detail = String(input.title);
+  } else if (toolName === "getTicketsByStatus" && input?.status) {
+    detail = String(input.status);
+  } else if (toolName === "getTicketsByAssignee" && input?.assignee) {
+    detail = String(input.assignee);
+  } else if (toolName === "assignTicket" && input?.assignee) {
+    detail = `→ ${input.assignee ?? "unassigned"}`;
+  } else if (toolName === "updateTicketStatus" && input?.status) {
+    detail = `→ ${input.status}`;
+  }
+
   return (
     <div className="flex gap-2.5 items-center">
       <Avatar role="ceo" size={28} />
       <div
-        className="font-mono uppercase inline-flex items-center gap-1.5"
+        className="font-mono inline-flex items-center gap-1.5"
         style={{
           fontSize: 11,
-          letterSpacing: "0.1em",
-          color: "#F2C744",
-          padding: "4px 8px",
+          letterSpacing: "0.06em",
+          color: done ? "#8E8B82" : "#F2C744",
+          padding: "4px 10px",
           background: "#1A1815",
           borderRadius: 8,
-          border: "1px solid #26241F",
+          border: `1px solid ${done ? "#1F1D1A" : "#26241F"}`,
         }}
       >
-        <span
-          className="pulse rounded-full"
-          style={{ width: 5, height: 5, background: "#F2C744" }}
-        />
-        {labels[toolName] ?? toolName}
+        {!done && (
+          <span
+            className="pulse rounded-full"
+            style={{ width: 5, height: 5, background: "#F2C744" }}
+          />
+        )}
+        {done && <span style={{ fontSize: 10 }}>✓</span>}
+        <span style={{ textTransform: "uppercase" }}>{label}</span>
+        {detail && (
+          <span
+            style={{
+              color: "#5E5C56",
+              textTransform: "none",
+              fontWeight: 400,
+            }}
+          >
+            {detail}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function QuestionCard({
+  toolCallId,
+  question,
+  options,
+  answered,
+}: {
+  toolCallId: string;
+  question: string;
+  options: string[];
+  answered?: string;
+}) {
+  const [selected, setSelected] = useState<number | null>(null);
+  const [customInput, setCustomInput] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const isDone = !!answered || submitting;
+
+  const submit = async (answer: string, index?: number) => {
+    if (isDone) return;
+    setSelected(index ?? -1);
+    setSubmitting(true);
+    await fetch("/api/agents/ceo/hooks/answer", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ toolCallId, answer }),
+    });
+  };
+
+  if (answered) {
+    return (
+      <div className="flex gap-2.5 items-start">
+        <Avatar role="ceo" size={28} />
+        <div
+          style={{
+            background: "#1A1815",
+            border: "1px solid #26241F",
+            borderRadius: 12,
+            padding: "16px 20px",
+            width: "100%",
+            maxWidth: 520,
+          }}
+        >
+          <div
+            style={{ fontSize: 14, color: "#8E8B82", marginBottom: 8 }}
+          >
+            {question}
+          </div>
+          <div
+            style={{
+              fontSize: 14,
+              color: "#FAFAF7",
+              background: "#26241F",
+              borderRadius: 8,
+              padding: "8px 12px",
+            }}
+          >
+            {answered}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex gap-2.5 items-start">
+      <Avatar role="ceo" size={28} />
+      <div
+        style={{
+          background: "#1A1815",
+          border: "1px solid #26241F",
+          borderRadius: 12,
+          padding: "16px 20px",
+          width: "100%",
+          maxWidth: 520,
+        }}
+      >
+        <div
+          style={{
+            fontSize: 15,
+            color: "#FAFAF7",
+            fontWeight: 500,
+            marginBottom: 12,
+          }}
+        >
+          {question}
+        </div>
+        <div className="flex flex-col gap-1">
+          {options.map((opt, i) => {
+            const isSelected = selected === i;
+            return (
+              <button
+                key={i}
+                onClick={() => submit(opt, i)}
+                disabled={isDone}
+                className="flex items-center gap-3 cursor-pointer"
+                style={{
+                  padding: "10px 14px",
+                  background: isSelected ? "#26241F" : "transparent",
+                  border: "none",
+                  borderRadius: 8,
+                  color: "#FAFAF7",
+                  fontSize: 14,
+                  textAlign: "left",
+                  fontFamily: "inherit",
+                  transition: "background 100ms",
+                  opacity: isDone && !isSelected ? 0.4 : 1,
+                }}
+              >
+                <span
+                  style={{
+                    width: 26,
+                    height: 26,
+                    borderRadius: 6,
+                    background: "#26241F",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: 12,
+                    fontWeight: 600,
+                    color: "#BFBCB1",
+                    flexShrink: 0,
+                  }}
+                >
+                  {i + 1}
+                </span>
+                {opt}
+              </button>
+            );
+          })}
+        </div>
+        <div
+          className="flex items-center gap-2"
+          style={{
+            marginTop: 8,
+            borderTop: "1px solid #26241F",
+            paddingTop: 8,
+          }}
+        >
+          <input
+            value={customInput}
+            onChange={(e) => setCustomInput(e.target.value)}
+            placeholder="Something else..."
+            disabled={isDone}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && customInput.trim()) {
+                submit(customInput.trim());
+              }
+            }}
+            style={{
+              flex: 1,
+              padding: "8px 12px",
+              background: "transparent",
+              border: "1px solid #3D3B36",
+              borderRadius: 8,
+              color: "#FAFAF7",
+              fontSize: 13,
+              fontFamily: "inherit",
+              outline: "none",
+            }}
+          />
+          <button
+            onClick={() => submit("skip")}
+            disabled={isDone}
+            className="cursor-pointer"
+            style={{
+              padding: "8px 14px",
+              background: "transparent",
+              border: "1px solid #3D3B36",
+              borderRadius: 8,
+              color: "#8E8B82",
+              fontSize: 13,
+              fontFamily: "inherit",
+            }}
+          >
+            Skip
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -110,8 +338,13 @@ function ThreadItem({
 }) {
   const age = formatAge(thread.updatedAt);
   return (
-    <button
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") onClick();
+      }}
       className="w-full text-left flex flex-col gap-1.5 cursor-pointer group"
       style={{
         padding: "14px 16px",
@@ -179,7 +412,7 @@ function ThreadItem({
           {thread.preview}
         </div>
       )}
-    </button>
+    </div>
   );
 }
 
@@ -220,11 +453,36 @@ function EmptyChat() {
           lineHeight: 1.6,
         }}
       >
-        Describe what you want to build. I'll research the market, draft a plan,
-        and walk you through it. You approve before any agent moves.
+        Describe what you want to build. I&apos;ll research the market, draft a
+        plan, and walk you through it. You approve before any agent moves.
       </div>
     </div>
   );
+}
+
+function deserializeMessages(
+  saved: Array<{ serialized?: string; content?: string; role?: string; _id?: string }>
+): UIMessage[] {
+  return saved
+    .map((m, i) => {
+      if (m.serialized) {
+        try {
+          const { id, role, parts, metadata } = JSON.parse(m.serialized);
+          return { id, role, parts, metadata } as UIMessage;
+        } catch {
+          return null;
+        }
+      }
+      if (m.content) {
+        return {
+          id: m._id ?? `legacy-${i}`,
+          role: (m.role ?? "user") as "user" | "assistant",
+          parts: [{ type: "text" as const, text: m.content }],
+        } as UIMessage;
+      }
+      return null;
+    })
+    .filter((m): m is UIMessage => m !== null);
 }
 
 function ChatArea({
@@ -232,31 +490,53 @@ function ChatArea({
   savedMessages,
 }: {
   threadId: Id<"ceoChatThreads"> | null;
-  savedMessages: Array<{ role: "user" | "assistant"; content: string; _id: string }>;
+  savedMessages: Array<{ serialized?: string; content?: string; role?: string; _id?: string }>;
 }) {
   const saveMessage = useMutation(api.ceoChatMutations.saveMessage);
   const updateTitle = useMutation(api.ceoChatMutations.updateThreadTitle);
 
-  const restored = savedMessages.map((m, i) => ({
-    id: `saved-${m._id}-${i}`,
-    role: m.role as "user" | "assistant",
-    parts: [{ type: "text" as const, text: m.content }],
-    createdAt: new Date(),
-  }));
+  const initialMessages = useMemo(
+    () => deserializeMessages(savedMessages),
+    [savedMessages]
+  );
+
+  const runIdRef = useRef<string | null>(null);
+
+  const transport = useMemo(
+    () =>
+      new WorkflowChatTransport({
+        api: "/api/agents/ceo",
+        onChatSendMessage: (response) => {
+          const id = response.headers.get("x-workflow-run-id");
+          if (id) runIdRef.current = id;
+        },
+        onChatEnd: () => {
+          runIdRef.current = null;
+        },
+        prepareReconnectToStreamRequest: ({ api, ...rest }) => {
+          const id = runIdRef.current;
+          if (!id) throw new Error("No active workflow run ID");
+          return {
+            ...rest,
+            api: `/api/agents/ceo/${encodeURIComponent(id)}/stream`,
+          };
+        },
+      }),
+    []
+  );
 
   const { messages, sendMessage, status, stop } = useChat({
     id: threadId ?? undefined,
     transport,
-    messages: restored.length > 0 ? restored : undefined,
+    messages: initialMessages.length > 0 ? initialMessages : undefined,
     onFinish: async ({ message }) => {
       if (!threadId) return;
-      const text = message.parts
-        ?.filter((p): p is { type: "text"; text: string } => p.type === "text")
-        .map((p) => p.text)
-        .join("\n");
-      if (text) {
-        await saveMessage({ threadId, role: "assistant", content: text });
-      }
+      await saveMessage({
+        threadId,
+        messageId: message.id,
+        role: message.role,
+        serialized: JSON.stringify(message),
+      });
     },
   });
 
@@ -277,15 +557,34 @@ function ChatArea({
     if (!text || isWorking || !threadId) return;
     setInput("");
 
-    if (!titleSetRef.current.has(threadId) && savedMessages.length === 0) {
+    if (!titleSetRef.current.has(threadId) && initialMessages.length === 0) {
       titleSetRef.current.add(threadId);
       const title = text.length > 60 ? text.slice(0, 60) + "..." : text;
       await updateTitle({ threadId, title });
     }
 
-    await saveMessage({ threadId, role: "user", content: text });
+    const userMessage: UIMessage = {
+      id: `user-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      role: "user",
+      parts: [{ type: "text", text }],
+    };
+    await saveMessage({
+      threadId,
+      messageId: userMessage.id,
+      role: "user",
+      serialized: JSON.stringify(userMessage),
+    });
+
     sendMessage({ text });
-  }, [input, isWorking, threadId, savedMessages.length, saveMessage, updateTitle, sendMessage]);
+  }, [
+    input,
+    isWorking,
+    threadId,
+    initialMessages.length,
+    saveMessage,
+    updateTitle,
+    sendMessage,
+  ]);
 
   if (!threadId) {
     return <EmptyChat />;
@@ -293,7 +592,6 @@ function ChatArea({
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      {/* Messages */}
       <div
         ref={scrollRef}
         className="flex-1 overflow-y-auto flex flex-col gap-3"
@@ -312,12 +610,44 @@ function ChatArea({
                 />
               );
             }
+            if (part.type === "data-question") {
+              const { question, options } = (part as { type: string; id: string; data: { question: string; options: string[] } }).data;
+              const toolCallId = (part as { id: string }).id;
+              const toolPart = parts.find(
+                (p) =>
+                  p.type === "tool-askQuestion" &&
+                  "toolCallId" in p &&
+                  p.toolCallId === toolCallId
+              );
+              const answered =
+                toolPart && "output" in toolPart
+                  ? String(toolPart.output)
+                  : undefined;
+              return (
+                <QuestionCard
+                  key={`${message.id}-${idx}`}
+                  toolCallId={toolCallId}
+                  question={question}
+                  options={options}
+                  answered={answered}
+                />
+              );
+            }
             if (part.type.startsWith("tool-")) {
               const toolName = part.type.replace("tool-", "");
+              if (toolName === "askQuestion") return null;
+              const toolInput =
+                "input" in part
+                  ? (part.input as Record<string, unknown>)
+                  : undefined;
+              const toolOutput =
+                "output" in part ? part.output : undefined;
               return (
                 <ToolCallIndicator
                   key={`${message.id}-${idx}`}
                   toolName={toolName}
+                  input={toolInput}
+                  output={toolOutput}
                 />
               );
             }
@@ -329,7 +659,6 @@ function ChatArea({
         )}
       </div>
 
-      {/* Input */}
       <div
         style={{
           borderTop: "1px solid #26241F",
@@ -392,9 +721,20 @@ export default function CeoChatPage() {
     useState<Id<"ceoChatThreads"> | null>(null);
 
   const activeThread = threads.find((t) => t._id === activeThreadId);
-  const messages = useQuery(
+  const rawMessages = useQuery(
     api.ceoChatQueries.getMessages,
     activeThreadId ? { threadId: activeThreadId } : "skip"
+  );
+
+  const savedMessages = useMemo(
+    () =>
+      (rawMessages ?? []).map((m: Record<string, unknown>) => ({
+        serialized: m.serialized as string | undefined,
+        content: m.content as string | undefined,
+        role: m.role as string | undefined,
+        _id: String(m._id),
+      })),
+    [rawMessages]
   );
 
   const handleNewChat = async () => {
@@ -411,7 +751,6 @@ export default function CeoChatPage() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
       <div
         style={{
           padding: "20px 24px 16px",
@@ -439,9 +778,7 @@ export default function CeoChatPage() {
         </div>
       </div>
 
-      {/* Two-pane */}
       <div className="flex flex-1 overflow-hidden min-h-0">
-        {/* Thread list */}
         <div
           className="overflow-y-auto shrink-0 flex flex-col"
           style={{
@@ -476,7 +813,6 @@ export default function CeoChatPage() {
           )}
         </div>
 
-        {/* Chat area */}
         <div
           className="flex-1 flex flex-col overflow-hidden"
           style={{ background: "#0F0E0C" }}
@@ -512,15 +848,20 @@ export default function CeoChatPage() {
               </div>
             </div>
           ) : null}
-          <ChatArea
-            key={activeThreadId ?? "empty"}
-            threadId={activeThreadId}
-            savedMessages={(messages ?? []).map((m) => ({
-              _id: m._id,
-              role: m.role,
-              content: m.content,
-            }))}
-          />
+          {activeThreadId && rawMessages === undefined ? (
+            <div
+              className="flex-1 flex items-center justify-center"
+              style={{ color: "#5E5C56", fontSize: 13 }}
+            >
+              Loading...
+            </div>
+          ) : (
+            <ChatArea
+              key={activeThreadId ?? "empty"}
+              threadId={activeThreadId}
+              savedMessages={savedMessages}
+            />
+          )}
         </div>
       </div>
     </div>

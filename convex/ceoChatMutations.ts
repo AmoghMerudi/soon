@@ -31,23 +31,34 @@ export const deleteThread = mutation({
 export const saveMessage = mutation({
   args: {
     threadId: v.id("ceoChatThreads"),
-    role: v.union(v.literal("user"), v.literal("assistant")),
-    content: v.string(),
+    messageId: v.string(),
+    role: v.string(),
+    serialized: v.string(),
   },
   handler: async (ctx, args) => {
     const now = Date.now();
     await ctx.db.insert("ceoChatMessages", {
       threadId: args.threadId,
+      messageId: args.messageId,
       role: args.role,
-      content: args.content,
+      serialized: args.serialized,
       createdAt: now,
     });
-    const preview =
-      args.content.length > 100
-        ? args.content.slice(0, 100) + "..."
-        : args.content;
+
+    let preview = "";
+    try {
+      const msg = JSON.parse(args.serialized);
+      preview = (msg.parts ?? [])
+        .filter((p: { type: string }) => p.type === "text")
+        .map((p: { text: string }) => p.text)
+        .join(" ");
+    } catch {
+      // ignore parse errors
+    }
+    if (preview.length > 100) preview = preview.slice(0, 100) + "...";
+
     await ctx.db.patch(args.threadId, {
-      preview,
+      preview: preview || "…",
       updatedAt: now,
     });
   },

@@ -76,8 +76,9 @@ export default defineSchema({
 
   ceoChatMessages: defineTable({
     threadId: v.id("ceoChatThreads"),
-    role: v.union(v.literal("user"), v.literal("assistant")),
-    content: v.string(),
+    messageId: v.string(),
+    role: v.string(),
+    serialized: v.string(),
     createdAt: v.number(),
   }).index("by_thread", ["threadId", "createdAt"]),
 });

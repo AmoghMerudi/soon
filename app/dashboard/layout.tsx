@@ -8,7 +8,6 @@ import { Avatar, Btn } from "@/lib/dashboard/primitives";
 const NAV_ITEMS = [
   { id: "tickets",  href: "/dashboard/tickets",   label: "Tickets",  glyph: "◆" },
   { id: "agents",   href: "/dashboard/agents",    label: "Agents",   glyph: "●" },
-  { id: "threads",  href: "/dashboard/threads",   label: "Threads",  glyph: "⇄" },
   { id: "ceo-chat", href: "/dashboard/ceo-chat",  label: "CEO Chat", glyph: "✉" },
   { id: "revenue",  href: "/dashboard/revenue",   label: "Revenue",  glyph: "$" },
 ];

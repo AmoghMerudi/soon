@@ -1,7 +1,10 @@
 import { DurableAgent } from "@workflow/ai/agent";
+import { openai } from "@workflow/ai/openai";
 import { getWritable } from "workflow";
 import type { ModelMessage, UIMessageChunk } from "ai";
 import { ceoTools } from "./tools";
+import { buildSkillsPrompt } from "./skills";
+import { createComposioSession } from "../composio-client";
 
 const CEO_INSTRUCTIONS = `You are the CEO Agent of 0to1, an AI-powered company operating system.
 
@@ -48,15 +51,39 @@ You delegate to CTO and CMO — never directly to execution agents (Developer, D
 ## Constraints:
 - Never create more than 10 tickets per interaction.
 - Never do implementation work — only plan, delegate, review.
-- Never assign tickets directly to Developer, Designer, or Marketing agents.`;
+- Never assign tickets directly to Developer, Designer, or Marketing agents.
+- When a user describes a new business idea, ALWAYS load the business-idea-intake skill first and follow its process.
+- Use askQuestion to present structured choices — never ask open-ended questions when concrete options exist.`;
+
+const CEO_COMPOSIO_TOOLKITS = ["slack", "googlesheets", "googledocs", "linear"];
+
+async function getComposioTools() {
+  "use step";
+
+  try {
+    const session = await createComposioSession({
+      userId: "default",
+      toolkits: CEO_COMPOSIO_TOOLKITS,
+    });
+    const tools = await session.tools();
+    return { tools, error: null };
+  } catch (e) {
+    return { tools: null, error: String(e) };
+  }
+}
 
 export async function ceoChatWorkflow(messages: ModelMessage[]) {
   "use workflow";
 
+  const composioResult = await getComposioTools();
+  const allTools = composioResult.tools
+    ? { ...ceoTools, ...composioResult.tools }
+    : ceoTools;
+
   const agent = new DurableAgent({
-    model: "anthropic/claude-sonnet-4.6",
-    instructions: CEO_INSTRUCTIONS,
-    tools: ceoTools,
+    model: openai("gpt-5.4"),
+    instructions: CEO_INSTRUCTIONS + buildSkillsPrompt(),
+    tools: allTools,
   });
 
   const writable = getWritable<UIMessageChunk>();
