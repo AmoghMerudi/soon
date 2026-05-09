@@ -2,6 +2,7 @@ import { tool } from "ai";
 import { z } from "zod";
 import { getConvexClient } from "@/lib/agent/convex-client";
 import { api } from "@/convex/_generated/api";
+import { exaSearchTool } from "./exa-tools";
 
 const AGENT_NAME = "Developer";
 
@@ -106,4 +107,6 @@ export const developerTools = {
       return { ok: true };
     },
   }),
+
+  exaSearch: exaSearchTool,
 };

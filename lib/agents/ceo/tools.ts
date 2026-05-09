@@ -6,6 +6,7 @@ import type { UIMessageChunk, ToolSet } from "ai";
 import { z } from "zod";
 import { getSkillContent } from "./skills";
 import { questionHook } from "./hooks";
+import { exaSearchDurableTool } from "../exa-tools";
 
 const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
@@ -228,6 +229,18 @@ async function saveStripeApiKeyStep(input: {
   await convex.mutation(api.projects.setStripeApiKey, {
     projectId: input.projectId as Id<"projects">,
     apiKey,
+async function storeGithubRepoStep(input: {
+  projectId: string;
+  repoUrl: string;
+  repoName: string;
+  owner: string;
+}) {
+  "use step";
+
+  await convex.mutation(api.mutations.updateProject, {
+    projectId: input.projectId as Id<"projects">,
+    githubRepo: input.repoUrl,
+    githubOwner: input.owner,
   });
 
   await convex.mutation(api.mutations.logAgentAction, {
@@ -241,6 +254,12 @@ async function saveStripeApiKeyStep(input: {
     ok: true,
     mode: apiKey.startsWith("sk_live_") ? "live" : "test",
   };
+    action: "github_repo_created",
+    details: `GitHub repo created: ${input.owner}/${input.repoName} — ${input.repoUrl}`,
+    projectId: input.projectId as Id<"projects">,
+  });
+
+  return { repoUrl: input.repoUrl, owner: input.owner, repoName: input.repoName };
 }
 
 async function writeQuestionToStream(
@@ -448,6 +467,20 @@ export function buildCeoTools(projectId: Id<"projects">): ToolSet {
       }),
       execute: askQuestionExecute,
     },
+
+    storeGithubRepo: {
+      description:
+        "After creating a GitHub repo via GITHUB_CREATE_REPO, call this to persist the repo URL and owner to the project record so the Developer agent can clone it. Must be called immediately after repo creation.",
+      inputSchema: z.object({
+        repoUrl: z.string().describe("Full HTTPS clone URL, e.g. https://github.com/owner/repo"),
+        repoName: z.string().describe("Repository name (slug only, no owner)"),
+        owner: z.string().describe("GitHub username or org that owns the repo"),
+      }),
+      execute: (input: Omit<Parameters<typeof storeGithubRepoStep>[0], "projectId">) =>
+        storeGithubRepoStep({ ...input, projectId: pid }),
+    },
+
+    exaSearch: exaSearchDurableTool,
   } as ToolSet;
 }
 

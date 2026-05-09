@@ -1,4 +1,5 @@
 import { ConvexError, v } from "convex/values";
+import type { MutationCtx } from "./_generated/server";
 import { mutation, internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
 
@@ -19,9 +20,94 @@ const priorityValidator = v.union(
   v.literal("low")
 );
 
-export const createTicket = mutation({
+const dispatchStatusValidator = v.union(
+  v.literal("pending"),
+  v.literal("running"),
+  v.literal("completed"),
+  v.literal("failed")
+);
+
+function normalizeAssignee(assignee: string | null): string | null {
+  return assignee?.toLowerCase() ?? null;
+}
+
+async function syncAssigneeState(
+  ctx: MutationCtx,
+  ticketId: any,
+  previousAssignee: string | null,
+  nextAssignee: string | null
+) {
+  if (previousAssignee && previousAssignee !== nextAssignee) {
+    const prev = await ctx.db
+      .query("agentConfig")
+      .withIndex("by_agentId", (q) => q.eq("agentId", previousAssignee))
+      .first();
+    if (prev) {
+      await ctx.db.patch(prev._id, {
+        currentTicketIds: prev.currentTicketIds.filter((id) => id !== ticketId),
+      });
+    }
+  }
+
+  if (!nextAssignee) return;
+
+  const next = await ctx.db
+    .query("agentConfig")
+    .withIndex("by_agentId", (q) => q.eq("agentId", nextAssignee))
+    .first();
+  if (next) {
+    if (
+      !next.currentTicketIds.includes(ticketId) &&
+      next.currentTicketIds.length >= next.maxActiveTickets
+    ) {
+      throw new ConvexError(
+        `agent ${nextAssignee} at active ticket cap (${next.maxActiveTickets})`
+      );
+    }
+    if (!next.currentTicketIds.includes(ticketId)) {
+      await ctx.db.patch(next._id, {
+        currentTicketIds: [...next.currentTicketIds, ticketId],
+      });
+    }
+  }
+
+  if (nextAssignee === "ceo") {
+    await ctx.db.insert("agentLogs", {
+      agent: "CEO",
+      action: "dispatch_pending",
+      details: "CEO assignment — trigger via chat at /dashboard/ceo-chat",
+      ticketId,
+    });
+    return;
+  }
+
+  await ctx.scheduler.runAfter(0, internal.dispatch.dispatchAgent, {
+    ticketId,
+    agentRole: nextAssignee,
+    attempt: 0,
+  });
+}
+
+export const updateProject = mutation({
   args: {
     projectId: v.id("projects"),
+    githubRepo: v.optional(v.string()),
+    githubOwner: v.optional(v.string()),
+    description: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const { projectId, ...fields } = args;
+    const patch: Record<string, unknown> = {};
+    if (fields.githubRepo !== undefined) patch.githubRepo = fields.githubRepo;
+    if (fields.githubOwner !== undefined) patch.githubOwner = fields.githubOwner;
+    if (fields.description !== undefined) patch.description = fields.description;
+    await ctx.db.patch(projectId, patch);
+  },
+});
+
+export const createTicket = mutation({
+  args: {
+    projectId: v.optional(v.id("projects")),
     title: v.string(),
     description: v.string(),
     status: statusValidator,
@@ -33,32 +119,38 @@ export const createTicket = mutation({
     parentTicket: v.optional(v.id("tickets")),
   },
   handler: async (ctx, args) => {
+    const assignee = normalizeAssignee(args.assignee);
     let depth = 0;
+    let projectId = args.projectId;
     if (args.parentTicket) {
       const parent = await ctx.db.get(args.parentTicket);
       if (!parent) throw new ConvexError("parent ticket not found");
-      if (parent.projectId && parent.projectId !== args.projectId) {
-        throw new ConvexError("sub-ticket project must match parent");
-      }
+      // Inherit projectId from parent if not explicitly provided
+      if (!projectId && parent.projectId) projectId = parent.projectId;
       depth = (parent.depth ?? 0) + 1;
       if (depth > MAX_DEPTH) {
         throw new ConvexError(`sub-ticket depth ${depth} exceeds max ${MAX_DEPTH}`);
       }
     }
 
-    return await ctx.db.insert("tickets", {
-      projectId: args.projectId,
+    const ticketId = await ctx.db.insert("tickets", {
+      projectId,
       title: args.title,
       description: args.description,
       status: args.status,
       priority: args.priority,
-      assignee: args.assignee,
+      assignee,
       tags: args.tags,
       createdBy: args.createdBy,
       taggedAgents: args.taggedAgents,
       parentTicket: args.parentTicket,
       depth,
+      dispatchStatus: assignee ? "pending" : undefined,
     });
+
+    await syncAssigneeState(ctx, ticketId, null, assignee);
+
+    return ticketId;
   },
 });
 
@@ -74,6 +166,7 @@ export const createSubTicket = mutation({
     taggedAgents: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
+    const assignee = normalizeAssignee(args.assignee);
     const parent = await ctx.db.get(args.parentTicket);
     if (!parent) throw new ConvexError("parent ticket not found");
     const depth = (parent.depth ?? 0) + 1;
@@ -81,19 +174,24 @@ export const createSubTicket = mutation({
       throw new ConvexError(`sub-ticket depth ${depth} exceeds max ${MAX_DEPTH}`);
     }
 
-    return await ctx.db.insert("tickets", {
+    const ticketId = await ctx.db.insert("tickets", {
       projectId: parent.projectId,
       title: args.title,
       description: args.description,
       status: "backlog",
       priority: args.priority,
-      assignee: args.assignee,
+      assignee,
       tags: args.tags ?? parent.tags,
       createdBy: args.createdBy,
       taggedAgents: args.taggedAgents ?? parent.taggedAgents,
       parentTicket: args.parentTicket,
       depth,
+      dispatchStatus: assignee ? "pending" : undefined,
     });
+
+    await syncAssigneeState(ctx, ticketId, null, assignee);
+
+    return ticketId;
   },
 });
 
@@ -158,49 +256,120 @@ export const assignTicket = mutation({
     const ticket = await ctx.db.get(args.ticketId);
     if (!ticket) throw new ConvexError("ticket not found");
 
-    if (ticket.assignee && ticket.assignee !== args.assignee) {
-      const prev = await ctx.db
-        .query("agentConfig")
-        .withIndex("by_agentId", (q) => q.eq("agentId", ticket.assignee as string))
-        .first();
-      if (prev) {
-        await ctx.db.patch(prev._id, {
-          currentTicketIds: prev.currentTicketIds.filter(
-            (id) => id !== args.ticketId
-          ),
-        });
+    const assignee = normalizeAssignee(args.assignee);
+
+    await syncAssigneeState(ctx, args.ticketId, ticket.assignee ?? null, assignee);
+
+    await ctx.db.patch(args.ticketId, {
+      assignee,
+      workflowRunId: undefined,
+      dispatchStatus: assignee ? "pending" : undefined,
+      dispatchErrorDetail: undefined,
+    });
+  },
+});
+
+export const storeWorkflowRun = mutation({
+  args: {
+    ticketId: v.id("tickets"),
+    runId: v.optional(v.string()),
+    dispatchStatus: v.optional(dispatchStatusValidator),
+    errorDetail: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const ticket = await ctx.db.get(args.ticketId);
+    if (!ticket) throw new ConvexError("ticket not found");
+
+    const nextStatus = args.dispatchStatus ?? (args.runId ? "running" : undefined);
+    const patch: Record<string, unknown> = {};
+
+    if (args.runId !== undefined) {
+      patch.workflowRunId = args.runId;
+    }
+
+    if (nextStatus !== undefined) {
+      patch.dispatchStatus = nextStatus;
+      if (nextStatus !== "failed" && args.errorDetail === undefined) {
+        patch.dispatchErrorDetail = undefined;
       }
     }
 
-    if (args.assignee) {
-      const next = await ctx.db
-        .query("agentConfig")
-        .withIndex("by_agentId", (q) => q.eq("agentId", args.assignee as string))
-        .first();
-      if (next) {
-        if (
-          !next.currentTicketIds.includes(args.ticketId) &&
-          next.currentTicketIds.length >= next.maxActiveTickets
-        ) {
-          throw new ConvexError(
-            `agent ${args.assignee} at active ticket cap (${next.maxActiveTickets})`
-          );
-        }
-        if (!next.currentTicketIds.includes(args.ticketId)) {
-          await ctx.db.patch(next._id, {
-            currentTicketIds: [...next.currentTicketIds, args.ticketId],
-          });
-        }
-      }
+    if (args.errorDetail !== undefined) {
+      patch.dispatchErrorDetail = args.errorDetail.slice(0, 500);
+    }
 
-      await ctx.scheduler.runAfter(0, internal.dispatch.dispatchAgent, {
+    await ctx.db.patch(args.ticketId, patch);
+  },
+});
+
+export const _storeWorkflowRunInternal = internalMutation({
+  args: {
+    ticketId: v.id("tickets"),
+    runId: v.optional(v.string()),
+    dispatchStatus: v.optional(dispatchStatusValidator),
+    errorDetail: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const ticket = await ctx.db.get(args.ticketId);
+    if (!ticket) throw new ConvexError("ticket not found");
+
+    const nextStatus = args.dispatchStatus ?? (args.runId ? "running" : undefined);
+    const patch: Record<string, unknown> = {};
+
+    if (args.runId !== undefined) {
+      patch.workflowRunId = args.runId;
+    }
+
+    if (nextStatus !== undefined) {
+      patch.dispatchStatus = nextStatus;
+      if (nextStatus !== "failed" && args.errorDetail === undefined) {
+        patch.dispatchErrorDetail = undefined;
+      }
+    }
+
+    if (args.errorDetail !== undefined) {
+      patch.dispatchErrorDetail = args.errorDetail.slice(0, 500);
+    }
+
+    await ctx.db.patch(args.ticketId, patch);
+  },
+});
+
+export const retryDispatch = mutation({
+  args: {
+    ticketId: v.id("tickets"),
+  },
+  handler: async (ctx, args) => {
+    const ticket = await ctx.db.get(args.ticketId);
+    if (!ticket) throw new ConvexError("ticket not found");
+    if (!ticket.assignee) throw new ConvexError("ticket is not assigned");
+
+    const assignee = ticket.assignee.toLowerCase();
+
+    await ctx.db.patch(args.ticketId, {
+      workflowRunId: undefined,
+      dispatchStatus: "pending",
+      dispatchErrorDetail: undefined,
+    });
+
+    if (assignee === "ceo") {
+      await ctx.db.insert("agentLogs", {
+        agent: "CEO",
+        action: "dispatch_pending",
+        details: "CEO assignment — trigger via chat at /dashboard/ceo-chat",
         ticketId: args.ticketId,
-        agentRole: args.assignee,
         projectId: ticket.projectId,
       });
+      return { status: "pending", via: "ceo_chat" as const };
     }
 
-    await ctx.db.patch(args.ticketId, { assignee: args.assignee });
+    await ctx.scheduler.runAfter(0, internal.dispatch.dispatchAgent, {
+      ticketId: args.ticketId,
+      agentRole: assignee,
+      attempt: 0,
+    });
+
+    return { status: "pending", via: "dispatch" as const };
   },
 });
 
@@ -213,6 +382,8 @@ export const reassignTicketInternal = internalMutation({
   handler: async (ctx, args) => {
     const ticket = await ctx.db.get(args.ticketId);
     if (!ticket) return;
+
+    const assignee = args.assignee.toLowerCase();
 
     if (ticket.assignee) {
       const prev = await ctx.db
@@ -230,7 +401,7 @@ export const reassignTicketInternal = internalMutation({
 
     const next = await ctx.db
       .query("agentConfig")
-      .withIndex("by_agentId", (q) => q.eq("agentId", args.assignee))
+      .withIndex("by_agentId", (q) => q.eq("agentId", assignee))
       .first();
     if (next && !next.currentTicketIds.includes(args.ticketId)) {
       await ctx.db.patch(next._id, {
@@ -239,8 +410,11 @@ export const reassignTicketInternal = internalMutation({
     }
 
     await ctx.db.patch(args.ticketId, {
-      assignee: args.assignee,
+      assignee,
       escalatedTo: args.escalatedTo,
+      workflowRunId: undefined,
+      dispatchStatus: assignee === "ceo" ? "pending" : undefined,
+      dispatchErrorDetail: undefined,
     });
   },
 });
