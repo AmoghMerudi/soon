@@ -7,6 +7,7 @@ import { WorkflowChatTransport } from "@workflow/ai";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
+import { MarkdownMessage } from "@/lib/dashboard/markdown-message";
 import { Avatar, Btn, Eyebrow } from "@/lib/dashboard/primitives";
 import { useProjectId } from "@/lib/dashboard/project-context";
 
@@ -29,11 +30,9 @@ function ChatBubble({
             color: "#FAFAF7",
             borderRadius: "16px 16px 6px 16px",
             padding: "10px 14px",
-            fontSize: 14,
-            lineHeight: 1.55,
           }}
         >
-          {text}
+          <MarkdownMessage text={text} variant="user" />
         </div>
       </div>
     );
@@ -45,14 +44,11 @@ function ChatBubble({
         className="flex-1 min-w-0"
         style={{
           paddingTop: 2,
-          fontSize: 14,
           color: pending ? "#5E5C56" : "#E6E3DA",
-          lineHeight: 1.6,
           fontStyle: pending ? "italic" : "normal",
-          whiteSpace: "pre-wrap",
         }}
       >
-        {text}
+        {pending ? text : <MarkdownMessage text={text} variant="assistant" />}
       </div>
     </div>
   );
@@ -62,10 +58,16 @@ function ToolCallIndicator({
   toolName,
   input,
   output,
+  state,
+  errorText,
+  done,
 }: {
   toolName: string;
   input?: Record<string, unknown>;
   output?: unknown;
+  state?: string;
+  errorText?: string;
+  done?: boolean;
 }) {
   const labels: Record<string, string> = {
     createTicket: "Creating ticket",
@@ -81,7 +83,7 @@ function ToolCallIndicator({
     askQuestion: "Waiting for your answer",
   };
 
-  const done = output !== undefined;
+  const isDone = done ?? output !== undefined;
   const label = labels[toolName] ?? toolName;
 
   let detail = "";
@@ -101,40 +103,185 @@ function ToolCallIndicator({
     detail = `→ ${input.status}`;
   }
 
+  const formatToolValue = (value: unknown) => {
+    if (typeof value === "string") return value;
+    if (
+      typeof value === "number" ||
+      typeof value === "boolean" ||
+      typeof value === "bigint"
+    ) {
+      return String(value);
+    }
+    if (value == null) return "";
+    try {
+      return JSON.stringify(
+        value,
+        (_key, nestedValue) =>
+          typeof nestedValue === "bigint"
+            ? nestedValue.toString()
+            : nestedValue,
+        2
+      );
+    } catch {
+      return String(value);
+    }
+  };
+
+  const renderedInput = input ? formatToolValue(input) : "";
+  const renderedOutput =
+    state === "output-error"
+      ? errorText ?? "Tool execution failed."
+      : state === "output-denied"
+        ? "Tool execution was denied."
+        : output !== undefined
+          ? formatToolValue(output)
+          : isDone
+            ? "No output returned."
+            : "Running...";
+
+  const outputLabel =
+    state === "output-error"
+      ? "Error"
+      : state === "output-denied"
+        ? "Denied"
+        : "Output";
+
   return (
-    <div className="flex gap-2.5 items-center">
+    <div className="flex gap-2.5 items-start">
       <Avatar role="ceo" size={28} />
-      <div
-        className="font-mono inline-flex items-center gap-1.5"
-        style={{
-          fontSize: 11,
-          letterSpacing: "0.06em",
-          color: done ? "#8E8B82" : "#F2C744",
-          padding: "4px 10px",
-          background: "#1A1815",
-          borderRadius: 8,
-          border: `1px solid ${done ? "#1F1D1A" : "#26241F"}`,
-        }}
-      >
-        {!done && (
-          <span
-            className="pulse rounded-full"
-            style={{ width: 5, height: 5, background: "#F2C744" }}
-          />
-        )}
-        {done && <span style={{ fontSize: 10 }}>✓</span>}
-        <span style={{ textTransform: "uppercase" }}>{label}</span>
-        {detail && (
-          <span
+      <div className="flex-1 min-w-0" style={{ maxWidth: 620 }}>
+        <div
+          className="font-mono inline-flex items-center gap-1.5"
+          style={{
+            fontSize: 11,
+            letterSpacing: "0.06em",
+            color: isDone ? "#8E8B82" : "#F2C744",
+            padding: "4px 10px",
+            background: "#1A1815",
+            borderRadius: 8,
+            border: `1px solid ${isDone ? "#1F1D1A" : "#26241F"}`,
+          }}
+        >
+          {!isDone && (
+            <span
+              className="pulse rounded-full"
+              style={{ width: 5, height: 5, background: "#F2C744" }}
+            />
+          )}
+          {isDone && <span style={{ fontSize: 10 }}>✓</span>}
+          <span style={{ textTransform: "uppercase" }}>{label}</span>
+          {detail && (
+            <span
+              style={{
+                color: "#5E5C56",
+                textTransform: "none",
+                fontWeight: 400,
+              }}
+            >
+              {detail}
+            </span>
+          )}
+        </div>
+        <details className="mt-2 group">
+          <summary
+            className="font-mono cursor-pointer list-none inline-flex items-center gap-2 select-none"
             style={{
-              color: "#5E5C56",
-              textTransform: "none",
-              fontWeight: 400,
+              fontSize: 11,
+              letterSpacing: "0.08em",
+              color: "#8E8B82",
             }}
           >
-            {detail}
-          </span>
-        )}
+            <span
+              style={{
+                fontSize: 10,
+                transform: "rotate(0deg)",
+                transition: "transform 160ms ease",
+              }}
+              className="group-open:rotate-90"
+            >
+              ▶
+            </span>
+            <span style={{ textTransform: "uppercase" }}>View I/O</span>
+          </summary>
+          <div className="mt-2 grid gap-2">
+            {renderedInput && (
+              <div
+                style={{
+                  background: "#12110F",
+                  border: "1px solid #26241F",
+                  borderRadius: 10,
+                  overflow: "hidden",
+                }}
+              >
+                <div
+                  className="font-mono uppercase"
+                  style={{
+                    fontSize: 10,
+                    letterSpacing: "0.12em",
+                    color: "#8E8B82",
+                    padding: "8px 10px",
+                    borderBottom: "1px solid #26241F",
+                  }}
+                >
+                  Input
+                </div>
+                <pre
+                  className="font-mono whitespace-pre-wrap break-words"
+                  style={{
+                    margin: 0,
+                    padding: "10px 12px",
+                    fontSize: 12,
+                    lineHeight: 1.6,
+                    color: "#DCD9CF",
+                    overflowX: "auto",
+                  }}
+                >
+                  {renderedInput}
+                </pre>
+              </div>
+            )}
+            <div
+              style={{
+                background: "#12110F",
+                border: "1px solid #26241F",
+                borderRadius: 10,
+                overflow: "hidden",
+              }}
+            >
+              <div
+                className="font-mono uppercase"
+                style={{
+                  fontSize: 10,
+                  letterSpacing: "0.12em",
+                  color:
+                    state === "output-error"
+                      ? "#F0A097"
+                      : state === "output-denied"
+                        ? "#F2C744"
+                        : "#8E8B82",
+                  padding: "8px 10px",
+                  borderBottom: "1px solid #26241F",
+                }}
+              >
+                {outputLabel}
+              </div>
+              <pre
+                className="font-mono whitespace-pre-wrap break-words"
+                style={{
+                  margin: 0,
+                  padding: "10px 12px",
+                  fontSize: 12,
+                  lineHeight: 1.6,
+                  color:
+                    state === "output-error" ? "#F0A097" : "#DCD9CF",
+                  overflowX: "auto",
+                }}
+              >
+                {renderedOutput}
+              </pre>
+            </div>
+          </div>
+        </details>
       </div>
     </div>
   );
@@ -635,8 +782,11 @@ function ChatArea({
                   p.toolCallId === toolCallId
               );
               const answered =
-                toolPart && "output" in toolPart
-                  ? String(toolPart.output)
+                toolPart &&
+                "state" in toolPart &&
+                toolPart.state === "output-available" &&
+                typeof toolPart.output === "string"
+                  ? toolPart.output
                   : undefined;
               return (
                 <QuestionCard
@@ -656,13 +806,29 @@ function ChatArea({
                   ? (part.input as Record<string, unknown>)
                   : undefined;
               const toolOutput =
-                "output" in part ? part.output : undefined;
+                "state" in part && part.state === "output-available"
+                  ? part.output
+                  : undefined;
+              const toolState = "state" in part ? part.state : undefined;
+              const toolErrorText =
+                "errorText" in part && typeof part.errorText === "string"
+                  ? part.errorText
+                  : undefined;
+              const toolDone =
+                "state" in part
+                  ? part.state === "output-available" ||
+                    part.state === "output-error" ||
+                    part.state === "output-denied"
+                  : toolOutput !== undefined;
               return (
                 <ToolCallIndicator
                   key={`${message.id}-${idx}`}
                   toolName={toolName}
                   input={toolInput}
                   output={toolOutput}
+                  state={toolState}
+                  errorText={toolErrorText}
+                  done={toolDone}
                 />
               );
             }

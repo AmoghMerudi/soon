@@ -6,6 +6,7 @@ import type { UIMessageChunk, ToolSet } from "ai";
 import { z } from "zod";
 import { getSkillContent } from "./skills";
 import { questionHook } from "./hooks";
+import { exaSearchDurableTool } from "../exa-tools";
 
 const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
@@ -401,6 +402,8 @@ export function buildCeoTools(projectId: Id<"projects">): ToolSet {
       }),
       execute: askQuestionExecute,
     },
+
+    exaSearch: exaSearchDurableTool,
   } as ToolSet;
 }
 

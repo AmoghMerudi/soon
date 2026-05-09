@@ -1,6 +1,7 @@
 import { DurableAgent } from "@workflow/ai/agent";
 import { openai } from "@workflow/ai/openai";
 import { getWritable } from "workflow";
+import { stepCountIs } from "ai";
 import type { ModelMessage, UIMessageChunk, ToolSet } from "ai";
 import { z } from "zod";
 import { buildCeoTools } from "./tools";
@@ -33,8 +34,9 @@ You delegate to CTO and CMO — never directly to execution agents (Developer, D
 
 ## When given a business idea:
 1. Ask 1-2 clarifying questions if the idea is vague.
-2. Analyze: market opportunity, pricing, technical complexity, risks.
-3. Present a phased plan (3-5 phases) with concrete milestones.
+2. Use exaSearch to research the market: competitors, pricing benchmarks, industry trends, and existing solutions.
+3. Analyze: market opportunity, pricing, technical complexity, risks.
+4. Present a phased plan (3-5 phases) with concrete milestones.
 4. On user approval, create tickets across workstreams:
    - Engineering: tag "engineering", assign to "CTO"
    - Design: tag "design", assign to "CMO"
@@ -182,6 +184,6 @@ export async function ceoChatWorkflow(
   await agent.stream({
     messages,
     writable,
-    maxSteps: 20,
+    stopWhen: stepCountIs(20),
   });
 }

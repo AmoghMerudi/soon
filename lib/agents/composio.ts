@@ -1,13 +1,21 @@
-import { Composio } from "@composio/core";
-import { VercelProvider } from "@composio/vercel";
 import type { ToolSet } from "ai";
 
-let _composio: Composio<VercelProvider> | null = null;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let _composio: any = null;
 
-export function getComposio(): Composio<VercelProvider> {
+async function loadComposioSdk() {
+  const [{ Composio }, { VercelProvider }] = await Promise.all([
+    import("@composio/core"),
+    import("@composio/vercel"),
+  ]);
+  return { Composio, VercelProvider };
+}
+
+export async function getComposio() {
   if (!_composio) {
     const apiKey = process.env.COMPOSIO_API_KEY;
     if (!apiKey) throw new Error("COMPOSIO_API_KEY is not set");
+    const { Composio, VercelProvider } = await loadComposioSdk();
     _composio = new Composio({ apiKey, provider: new VercelProvider() });
   }
   return _composio;
@@ -26,12 +34,12 @@ const COMPOSIO_TOOLKITS = new Set(["github", "vercel"]);
  */
 export async function getComposioToolsForAgent(
   agentEntityId: string,
-  enabledTools: string[],
+  enabledTools: string[]
 ): Promise<ToolSet> {
   const toolkits = enabledTools.filter((t) => COMPOSIO_TOOLKITS.has(t));
   if (toolkits.length === 0) return {} as ToolSet;
 
-  const composio = getComposio();
+  const composio = await getComposio();
   const merged: ToolSet = {} as ToolSet;
 
   await Promise.all(
@@ -56,8 +64,8 @@ export async function getComposioToolsForAgent(
 
 export async function authorizeAgentToolkit(
   agentEntityId: string,
-  toolkitSlug: string,
+  toolkitSlug: string
 ) {
-  const composio = getComposio();
+  const composio = await getComposio();
   return composio.toolkits.authorize(agentEntityId, toolkitSlug);
 }
