@@ -52,6 +52,18 @@ export default defineSchema({
     action: v.string(),
     details: v.string(),
     ticketId: v.optional(v.id("tickets")),
+  }).index("by_ticket", ["ticketId"]),
+
+  skills: defineTable({
+    name: v.string(),
+    description: v.string(),
+    content: v.string(),
+    agent: v.optional(v.string()),
+    tags: v.array(v.string()),
+    version: v.number(),
+    isActive: v.boolean(),
   })
-    .index("by_ticket", ["ticketId"]),
+    .index("by_name", ["name"])
+    .index("by_agent", ["agent"])
+    .index("by_active", ["isActive"]),
 });

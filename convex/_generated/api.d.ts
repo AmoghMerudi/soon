@@ -10,6 +10,8 @@
 
 import type * as mutations from "../mutations.js";
 import type * as queries from "../queries.js";
+import type * as seedSkills from "../seedSkills.js";
+import type * as skills from "../skills.js";
 
 import type {
   ApiFromModules,
@@ -20,6 +22,8 @@ import type {
 declare const fullApi: ApiFromModules<{
   mutations: typeof mutations;
   queries: typeof queries;
+  seedSkills: typeof seedSkills;
+  skills: typeof skills;
 }>;
 
 /**
