@@ -8,7 +8,6 @@ import { api } from "@/convex/_generated/api";
 import { developerTools } from "./tools";
 import { e2bTools, disposeSandbox } from "./e2b-tools";
 import { buildSkillsPrompt } from "./skills";
-import { getComposioDurableTools } from "../composio-durable-tools";
 import {
   markDispatchCompleted,
   markDispatchFailed,
@@ -17,8 +16,6 @@ import {
   attachObservabilityContext,
   createObservedTools,
 } from "../shared/observability";
-
-const DEVELOPER_COMPOSIO_TOOLKITS = ["github", "vercel"];
 
 const DEVELOPER_INSTRUCTIONS = `You are the Developer Agent — a senior full-stack engineer at 0to1.
 
@@ -36,16 +33,23 @@ const DEVELOPER_INSTRUCTIONS = `You are the Developer Agent — a senior full-st
 3. Follow the loaded skill's process exactly.
 4. If no skill matches, follow this default flow:
    a. Move the ticket to "in_progress" via updateTicketStatus.
-   b. Do the work using GitHub + Vercel tools and E2B sandbox.
+   b. Do the work in the E2B sandbox using gh/git CLI and (optionally) Vercel tools.
    c. Add a comment describing what you did and any decisions.
    d. Attach artifacts (PR url, preview deploy) via addArtifact.
    e. Move the ticket to "in_review" via updateTicketStatus.
 
-## GitHub tools (when available)
-- Use GITHUB_* tools for repo work: list/get repos, create branches, open pull requests, read code.
-- Default to creating a feature branch named "agent/<short-slug>" off the repo's default branch.
-- All code changes ship as pull requests — never push directly to the default branch.
-- After opening a PR, attach its URL to the ticket via addArtifact (type: "pr").
+## GitHub — via gh/git CLI inside the sandbox
+You DO NOT have direct GitHub tools. All GitHub work happens through the \`gh\` and \`git\` CLIs inside the E2B sandbox via runShell. The sandbox is pre-configured with a bot-account PAT (\`GH_TOKEN\`) and a git credential helper, so authentication is automatic.
+
+Standard flow (run via runShell):
+- \`gh auth status\` — verify auth at the start.
+- \`gh repo clone <owner>/<repo>\` — or \`gh repo create <name> --private --clone\` for new projects.
+- \`git checkout -B agent/<ticket-slug>\` — always work on a feature branch, never on main.
+- After commits: \`git push -u origin agent/<ticket-slug>\`.
+- \`gh pr create --base main --head agent/<ticket-slug> --title "..." --body "..."\` — open the PR.
+- Capture the PR URL from gh's output and attach via addArtifact (type: "pr").
+- Never push to \`main\`. Branch protection will reject it anyway, but don't try.
+- Never run \`git push --force\` against a shared branch. Use \`--force-with-lease\` only on your own agent branch when amending review fixes.
 
 ## Vercel tools (when available)
 - After opening a PR, use VERCEL_* tools to trigger or fetch the preview deployment for that branch.
@@ -57,6 +61,7 @@ const DEVELOPER_INSTRUCTIONS = `You are the Developer Agent — a senior full-st
 - All code execution happens through runShell / runCode — never claim something is "tested" without running it.
 - Use writeFile to scaffold files, runShell for git/build/test/lint, readFile to verify output.
 - The sandbox is fresh per ticket — clone any repo you need at the start.
+- For Next.js work: after \`bun install\`, you can run \`bun next dev --port 3000 &\` and then call getSandboxPreview({ port: 3000 }) to get a public URL the user can view live. Attach it via addArtifact (type: "deployment").
 - Don't run destructive commands outside the sandbox.
 
 ## Constraints
@@ -103,22 +108,11 @@ export async function developerTicketWorkflow(ticketId: string) {
 
     const githubRepo = await getProjectGithubRepo(ticketId);
 
-    const composioResult = await getComposioDurableTools({
-      userId: "developer",
-      toolkits: DEVELOPER_COMPOSIO_TOOLKITS,
-    });
-
-    if (composioResult.error) {
-      await logAction(
-        ticketId,
-        "composio_unavailable",
-        `Composio tools not loaded: ${composioResult.error}`
-      );
-    }
-
-    const allTools = composioResult.tools
-      ? { ...developerTools, ...e2bTools, ...composioResult.tools }
-      : { ...developerTools, ...e2bTools };
+    // Composio is intentionally disabled for the developer agent: GitHub goes through
+    // the bot PAT in the E2B sandbox, and Vercel previews aren't wired in yet. The
+    // composio SDK also fails inside the Workflow VM context with
+    // ERR_VM_DYNAMIC_IMPORT_CALLBACK_MISSING.
+    const allTools = { ...developerTools, ...e2bTools };
     const observedTools = createObservedTools(allTools, {
       ticketId,
       workflowRunId,
@@ -140,8 +134,8 @@ export async function developerTicketWorkflow(ticketId: string) {
           content: [
         `You have been assigned ticket ${ticketId}. Read it with getTicketDetails, then load the appropriate skill and follow its process. Move the ticket to in_review when done.`,
         githubRepo
-          ? `Project GitHub repo: ${githubRepo} — clone this repo in the E2B sandbox before starting any code work.`
-          : `No GitHub repo is configured for this project yet. If you need one, mark the ticket blocked and ask the CTO to set up a GitHub repo via the CEO.`,
+          ? `Project GitHub repo: ${githubRepo} — clone with \`gh repo clone ${githubRepo}\` in the sandbox before any code work. The bot PAT is preconfigured as GH_TOKEN.`
+          : `No GitHub repo is configured for this project yet. The bot account can create one — use \`gh repo create <slug> --private --clone\` inside the sandbox, then update the project record. The bot PAT is preconfigured as GH_TOKEN.`,
       ].join("\n\n"),
         },
       ],

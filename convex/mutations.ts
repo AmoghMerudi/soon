@@ -419,21 +419,78 @@ export const reassignTicketInternal = internalMutation({
   },
 });
 
+const MENTION_REGEX = /(?:^|[^\w])@([\w-]+)/g;
+const WIRED_MENTION_AGENTS = new Set([
+  "cto",
+  "cmo",
+  "developer",
+  "designer",
+  "marketing",
+]);
+
+function parseMentions(content: string): string[] {
+  const found = new Set<string>();
+  let match: RegExpExecArray | null;
+  MENTION_REGEX.lastIndex = 0;
+  while ((match = MENTION_REGEX.exec(content)) !== null) {
+    found.add(match[1].toLowerCase());
+  }
+  return Array.from(found);
+}
+
 export const addComment = mutation({
   args: {
     ticketId: v.id("tickets"),
     author: v.string(),
     content: v.string(),
+    mentions: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
     const ticket = await ctx.db.get(args.ticketId);
     if (!ticket) throw new ConvexError("ticket not found");
-    return await ctx.db.insert("comments", {
+
+    const candidates = new Set<string>([
+      ...(args.mentions ?? []).map((m) => m.toLowerCase()),
+      ...parseMentions(args.content),
+    ]);
+
+    const validMentions: string[] = [];
+    for (const candidate of candidates) {
+      const config = await ctx.db
+        .query("agentConfig")
+        .withIndex("by_agentId", (q) => q.eq("agentId", candidate))
+        .first();
+      if (config) validMentions.push(candidate);
+    }
+
+    const commentId = await ctx.db.insert("comments", {
       projectId: ticket.projectId,
       ticketId: args.ticketId,
       author: args.author,
       content: args.content,
+      mentions: validMentions.length > 0 ? validMentions : undefined,
     });
+
+    for (const agentId of validMentions) {
+      await ctx.db.insert("agentLogs", {
+        projectId: ticket.projectId,
+        agent: agentId,
+        action: "mentioned",
+        details: `Mentioned by ${args.author} in a comment`,
+        ticketId: args.ticketId,
+      });
+
+      if (agentId === "ceo") continue;
+      if (!WIRED_MENTION_AGENTS.has(agentId)) continue;
+
+      await ctx.scheduler.runAfter(0, internal.dispatch.dispatchAgent, {
+        ticketId: args.ticketId,
+        agentRole: agentId,
+        attempt: 0,
+      });
+    }
+
+    return commentId;
   },
 });
 

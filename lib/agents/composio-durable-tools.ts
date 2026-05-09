@@ -1,77 +1,56 @@
-import { tool, type ToolSet } from "ai";
-import { jsonSchemaToZod } from "@composio/json-schema-to-zod";
-import type {
-  ComposioSessionConfig,
-  ComposioToolSchema,
-} from "./composio-client";
+import type { ToolSet } from "ai";
 
-async function getComposioToolSchemasStep(config: ComposioSessionConfig) {
-  "use step";
-
-  try {
-    const { getComposioSessionToolSchemas } = await import("./composio-client");
-    const tools = await getComposioSessionToolSchemas(config);
-    return { tools, error: null };
-  } catch (error) {
-    return { tools: null, error: String(error) };
-  }
-}
-
-async function executeComposioToolStep(input: {
+/**
+ * Fetch Composio's Tool Router tools via MCP for use in a workflow agent.
+ * Per Composio's AI SDK guide, the recommended pattern is to scope the
+ * session to the `composio` meta-toolkit and let the LLM use the exposed
+ * search / multi-execute / manage-connections tools to discover and run
+ * any underlying integration.
+ *
+ * https://composio.dev/toolkits/composio/framework/ai-sdk
+ *
+ * Note: the `toolkits` parameter is retained for call-site compatibility
+ * but is no longer used — the meta-toolkit covers every integration.
+ *
+ * The caller is responsible for invoking `close()` once the agent stream
+ * has finished (typically in a `try/finally`).
+ */
+export async function getComposioDurableTools(config: {
   userId: string;
-  toolkits: string[];
-  toolSlug: string;
-  arguments: Record<string, unknown>;
-}) {
-  "use step";
-
-  const { executeComposioSessionTool } = await import("./composio-client");
-  return executeComposioSessionTool(input);
-}
-
-function normalizeToolInput(input: unknown): Record<string, unknown> {
-  if (input && typeof input === "object" && !Array.isArray(input)) {
-    return input as Record<string, unknown>;
-  }
-
-  return {};
-}
-
-function toDurableTool(
-  schema: ComposioToolSchema,
-  config: ComposioSessionConfig
-) {
-  return tool({
-    description: schema.description ?? schema.name ?? schema.slug,
-    inputSchema: jsonSchemaToZod(
-      (schema.inputParameters ?? {
-        type: "object",
-        properties: {},
-        additionalProperties: true,
-      }) as Record<string, unknown>
-    ),
-    execute: async (input: unknown) =>
-      executeComposioToolStep({
-        userId: config.userId,
-        toolkits: config.toolkits,
-        toolSlug: schema.slug,
-        arguments: normalizeToolInput(input),
-      }),
-  });
-}
-
-export async function getComposioDurableTools(config: ComposioSessionConfig): Promise<{
+  toolkits?: string[];
+}): Promise<{
   tools: ToolSet | null;
+  close: () => Promise<void>;
   error: string | null;
 }> {
-  const result = await getComposioToolSchemasStep(config);
-  if (!result.tools) {
-    return { tools: null, error: result.error };
+  try {
+    // Hide `@ai-sdk/mcp` from the workflow bundler's static analysis so it
+    // isn't traced into the steps bundle. Its transitive `pkce-challenge`
+    // dep doesn't expose a matching export condition for the workflow
+    // bundler, but at runtime Node resolves it fine.
+    const mcpSpec = ["@ai-sdk", "mcp"].join("/");
+    const importDynamic = (s: string): Promise<unknown> =>
+      (Function("s", "return import(s)") as (s: string) => Promise<unknown>)(s);
+    const [{ getComposioMcpConnection }, mcpModule] = await Promise.all([
+      import("./composio-client"),
+      importDynamic(mcpSpec) as Promise<typeof import("@ai-sdk/mcp")>,
+    ]);
+    const { createMCPClient } = mcpModule as typeof import("@ai-sdk/mcp");
+    const { url, headers } = await getComposioMcpConnection(config.userId);
+    const mcpClient = await createMCPClient({
+      transport: { type: "http", url, headers },
+    });
+    const tools = (await mcpClient.tools()) as ToolSet;
+    return {
+      tools,
+      close: () => mcpClient.close(),
+      error: null,
+    };
+  } catch (error) {
+    return {
+      tools: null,
+      close: async () => {},
+      error: String(error),
+    };
   }
-
-  const tools = Object.fromEntries(
-    result.tools.map((tool) => [tool.slug, toDurableTool(tool, config)])
-  ) as ToolSet;
-
-  return { tools, error: null };
 }

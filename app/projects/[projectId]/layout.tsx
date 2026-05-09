@@ -91,8 +91,22 @@ function Sidebar({
   projectId: string;
   projectName: string;
 }) {
-  const agents = SEED_AGENTS;
+  const agentConfigs = useQuery(api.queries.getAgentConfigs, {});
   const NAV_ITEMS = navItems(projectId);
+
+  const agentsHref = `/projects/${projectId}/agents`;
+
+  // Build display list: prefer live DB data, fall back to SEED_AGENTS shape
+  const agents = SEED_AGENTS.map((seed) => {
+    const config = agentConfigs?.find((c) => c.agentId === seed.role);
+    let state: "working" | "idle" | "blocked" = seed.state;
+    if (config) {
+      if (config.status === "active" || config.status === "busy") state = "working";
+      else if (config.status === "paused") state = "blocked";
+      else state = "idle";
+    }
+    return { role: seed.role, state };
+  });
   const activeId = NAV_ITEMS.find(
     (i) => pathname === i.href || pathname.startsWith(i.href + "/")
   )?.id;
@@ -208,7 +222,12 @@ function Sidebar({
         </div>
         <div className="flex flex-col gap-2">
           {agents.map((a) => (
-            <div key={a.role} className="flex items-center gap-2.5">
+            <Link
+              key={a.role}
+              href={agentsHref}
+              className="flex items-center gap-2.5"
+              style={{ textDecoration: "none" }}
+            >
               <Avatar role={a.role} size={22} />
               <div className="flex-1">
                 <div
@@ -221,8 +240,7 @@ function Sidebar({
                   className="font-mono"
                   style={{
                     fontSize: 11,
-                    color:
-                      a.state === "blocked" ? "#C8483A" : "#8E8B82",
+                    color: a.state === "blocked" ? "#C8483A" : "#8E8B82",
                     letterSpacing: "0.04em",
                   }}
                 >
@@ -244,7 +262,7 @@ function Sidebar({
                   {a.state === "blocked" && "● blocked"}
                 </div>
               </div>
-            </div>
+            </Link>
           ))}
         </div>
       </div>

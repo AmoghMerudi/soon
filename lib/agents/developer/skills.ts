@@ -41,10 +41,11 @@ Activate this skill when:
 3. Move the ticket to "in_progress" immediately.
 
 ### Phase 2: Set Up the Workspace
-1. Clone the target repo into the sandbox using runShell.
-2. Create a feature branch: \`agent/<ticket-slug>\`.
-3. Install dependencies and verify the project builds cleanly.
-4. If the build fails before any changes, mark the ticket blocked with the build error.
+1. Verify auth: \`runShell("gh auth status")\`. If this fails, mark blocked — the bot PAT isn't configured.
+2. Clone the target repo: \`runShell("gh repo clone <owner>/<repo>")\`. If the project has no repo yet, create one: \`runShell("gh repo create <name> --private --clone")\`.
+3. Create a feature branch off main: \`runShell("git checkout -B agent/<ticket-slug>", { cwd: "<repo>" })\`. Never work on main.
+4. Install dependencies (\`bun install\` preferred, fall back to \`pnpm install\` or \`npm install\`) and verify the project builds cleanly.
+5. If the build fails before any changes, mark the ticket blocked with the build error.
 
 ### Phase 3: Implement
 1. Read existing code in the area you're modifying to understand patterns.
@@ -58,12 +59,13 @@ Activate this skill when:
 ### Phase 4: Verify and Ship
 1. Run linting and type checks. Fix all errors.
 2. Run the full test suite one final time.
-3. Commit with a clear message referencing the ticket.
-4. Push the branch and open a pull request via GitHub tools.
-5. Attach the PR URL to the ticket via addArtifact (type: "pr").
-6. If a Vercel preview deployment is available, attach it via addArtifact (type: "deployment").
-7. Add a comment summarizing what was built, any design decisions, and how to test it.
-8. Move the ticket to "in_review".
+3. Stage and commit: \`runShell("git add -A && git commit -m '<conventional commit msg referencing ticket>'", { cwd: "<repo>" })\`.
+4. Push the branch: \`runShell("git push -u origin agent/<ticket-slug>", { cwd: "<repo>" })\`.
+5. Open the PR: \`runShell("gh pr create --base main --head agent/<ticket-slug> --title '...' --body '...'", { cwd: "<repo>" })\`. Capture the PR URL from stdout.
+6. Attach the PR URL to the ticket via addArtifact (type: "pr").
+7. If a Vercel preview deployment is available, attach it via addArtifact (type: "deployment"). For local Next.js previews you can run \`bun next dev --port 3000 &\` then call getSandboxPreview({ port: 3000 }).
+8. Add a comment summarizing what was built, any design decisions, and how to test it.
+9. Move the ticket to "in_review".
 
 ### If Blocked
 - If you can't resolve an issue after one genuine attempt, call markBlocked immediately.
@@ -103,11 +105,12 @@ Activate this skill when:
 5. Check if related code paths need the same fix.
 
 ### Phase 5: Ship
-1. Commit with a clear message: what was broken, why, and how it's fixed.
-2. Push and open a PR via GitHub tools.
-3. Attach the PR URL to the ticket via addArtifact (type: "pr").
-4. Add a comment with: root cause analysis, what was fixed, and how to verify.
-5. Move the ticket to "in_review".
+1. Commit: \`runShell("git add -A && git commit -m 'fix: <root cause summary> (ticket <id>)'", { cwd: "<repo>" })\`.
+2. Push: \`runShell("git push -u origin agent/<ticket-slug>", { cwd: "<repo>" })\`.
+3. Open PR: \`runShell("gh pr create --base main --head agent/<ticket-slug> --title 'fix: ...' --body '...'", { cwd: "<repo>" })\`. Capture the URL.
+4. Attach the PR URL to the ticket via addArtifact (type: "pr").
+5. Add a comment with: root cause analysis, what was fixed, and how to verify.
+6. Move the ticket to "in_review".
 
 ### If Blocked
 - Can't reproduce → add comment with exact steps tried, mark blocked.
@@ -130,7 +133,9 @@ Activate this skill when:
 3. Categorize: must-fix (blocking), should-fix (quality), nice-to-have (style).
 
 ### Phase 2: Address Feedback
-1. Clone the repo and check out the existing PR branch.
+1. Clone the repo and check out the existing PR branch:
+   - \`runShell("gh repo clone <owner>/<repo>")\`
+   - \`runShell("gh pr checkout <pr-number>", { cwd: "<repo>" })\` — pulls the PR branch automatically.
 2. Address each must-fix item first, then should-fix items.
 3. For each change:
    - Make the code change
@@ -139,8 +144,8 @@ Activate this skill when:
 4. For nice-to-have items: implement if quick, otherwise add a comment explaining the tradeoff.
 
 ### Phase 3: Respond
-1. Commit all changes with a clear message referencing the review.
-2. Push to the existing PR branch.
+1. Commit all changes: \`runShell("git add -A && git commit -m 'review: <summary>'", { cwd: "<repo>" })\`.
+2. Push to the existing PR branch: \`runShell("git push", { cwd: "<repo>" })\`. Use \`--force-with-lease\` only if you needed to amend or rebase.
 3. Add a comment to the ticket listing each feedback item and how it was addressed.
 4. Move the ticket back to "in_review".
 

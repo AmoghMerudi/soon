@@ -1,10 +1,62 @@
 import { z } from "zod";
 
 let _sandboxId: string | null = null;
+let _bootstrapped = false;
 
 async function getSandboxClass() {
   const { Sandbox } = await import("@e2b/code-interpreter");
   return Sandbox;
+}
+
+function getSandboxEnvs(): Record<string, string> {
+  const envs: Record<string, string> = {
+    GIT_AUTHOR_NAME: "agent-bot",
+    GIT_AUTHOR_EMAIL: "agent-bot@users.noreply.github.com",
+    GIT_COMMITTER_NAME: "agent-bot",
+    GIT_COMMITTER_EMAIL: "agent-bot@users.noreply.github.com",
+  };
+  const pat = process.env.AGENT_GITHUB_PAT;
+  if (pat) {
+    // gh CLI auto-detects GH_TOKEN; git uses it via the credential helper we configure on bootstrap.
+    envs.GH_TOKEN = pat;
+  }
+  return envs;
+}
+
+async function bootstrapSandbox(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  sandbox: any,
+) {
+  if (_bootstrapped) return;
+
+  // Install gh CLI if not present. The default E2B code-interpreter template is plain Ubuntu
+  // and does not ship with gh. Pulling the static binary is faster and more reliable than apt.
+  const ghVersion = "2.62.0";
+  const installGh = [
+    "if ! command -v gh >/dev/null 2>&1; then",
+    `  curl -fsSL https://github.com/cli/cli/releases/download/v${ghVersion}/gh_${ghVersion}_linux_amd64.tar.gz -o /tmp/gh.tgz`,
+    "  tar -xzf /tmp/gh.tgz -C /tmp",
+    `  install -m 0755 /tmp/gh_${ghVersion}_linux_amd64/bin/gh /usr/local/bin/gh`,
+    `  rm -rf /tmp/gh.tgz /tmp/gh_${ghVersion}_linux_amd64`,
+    "fi",
+  ].join("\n");
+
+  // Configure git identity + credential helper that pulls from GH_TOKEN.
+  // The credential helper writes the token only to the in-sandbox process — never to disk.
+  const configureGit = [
+    "git config --global init.defaultBranch main",
+    "git config --global pull.rebase true",
+    "git config --global push.default current",
+    "git config --global user.name 'agent-bot'",
+    "git config --global user.email 'agent-bot@users.noreply.github.com'",
+    // Credential helper: when git asks for a password on github.com, return the GH_TOKEN env var.
+    `git config --global credential.https://github.com.helper '!f() { echo "username=x-access-token"; echo "password=$GH_TOKEN"; }; f'`,
+  ].join(" && ");
+
+  await sandbox.commands.run(`${installGh}\n${configureGit}`, {
+    timeoutMs: 90_000,
+  });
+  _bootstrapped = true;
 }
 
 async function getOrCreateSandbox() {
@@ -12,13 +64,21 @@ async function getOrCreateSandbox() {
 
   if (_sandboxId) {
     try {
-      return await Sandbox.connect(_sandboxId);
+      const sandbox = await Sandbox.connect(_sandboxId);
+      await bootstrapSandbox(sandbox);
+      return sandbox;
     } catch {
       _sandboxId = null;
+      _bootstrapped = false;
     }
   }
-  const sandbox = await Sandbox.create({ timeoutMs: 10 * 60_000 });
+  const sandbox = await Sandbox.create({
+    timeoutMs: 10 * 60_000,
+    envs: getSandboxEnvs(),
+  });
   _sandboxId = sandbox.sandboxId;
+  _bootstrapped = false;
+  await bootstrapSandbox(sandbox);
   return sandbox;
 }
 
@@ -99,6 +159,20 @@ export async function disposeSandbox() {
     // sandbox may have already timed out
   }
   _sandboxId = null;
+  _bootstrapped = false;
+}
+
+async function getSandboxPreviewStep(input: { port: number }) {
+  "use step";
+
+  const sandbox = await getOrCreateSandbox();
+  // E2B exposes any listening port via getHost(); the URL is publicly reachable from the browser.
+  const host: string = await sandbox.getHost(input.port);
+  return {
+    sandboxId: _sandboxId,
+    port: input.port,
+    url: `https://${host}`,
+  };
 }
 
 // --- Tool definitions for DurableAgent ---
@@ -155,5 +229,18 @@ export const e2bTools = {
       content: z.string().describe("File content"),
     }),
     execute: writeFileStep,
+  },
+
+  getSandboxPreview: {
+    description:
+      "Get a public preview URL for a port listening inside the sandbox (e.g. 3000 for `next dev`). Call this AFTER starting the dev server so the user can see the running app live in their dashboard. Attach the returned URL via addArtifact (type: 'deployment') so the frontend can render it.",
+    inputSchema: z.object({
+      port: z
+        .number()
+        .int()
+        .positive()
+        .describe("Port the dev server is listening on (typically 3000)"),
+    }),
+    execute: getSandboxPreviewStep,
   },
 };

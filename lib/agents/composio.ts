@@ -3,29 +3,23 @@ import type { ToolSet } from "ai";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _composio: any = null;
 
-async function loadComposioSdk() {
-  const [{ Composio }, { VercelProvider }] = await Promise.all([
-    import("@composio/core"),
-    import("@composio/vercel"),
-  ]);
-  return { Composio, VercelProvider };
-}
-
 export async function getComposio() {
   if (!_composio) {
     const apiKey = process.env.COMPOSIO_API_KEY;
     if (!apiKey) throw new Error("COMPOSIO_API_KEY is not set");
-    const { Composio, VercelProvider } = await loadComposioSdk();
-    _composio = new Composio({ apiKey, provider: new VercelProvider() });
+    const { Composio } = await import("@composio/core");
+    _composio = new Composio({ apiKey });
   }
   return _composio;
 }
 
 /**
- * Toolkits we route through Composio. Convex is intentionally excluded — we use
- * the Convex client directly for our own database, not Composio.
+ * Toolkits we route through Composio. GitHub is intentionally excluded — the
+ * developer agent talks to GitHub via the `gh`/`git` CLI inside its E2B
+ * sandbox using a bot-account PAT (AGENT_GITHUB_PAT), not via Composio.
+ * Convex is also excluded — we use the Convex client directly.
  */
-const COMPOSIO_TOOLKITS = new Set(["github", "vercel"]);
+const COMPOSIO_TOOLKITS = new Set(["vercel"]);
 
 /**
  * Fetch all Composio-backed tools for an agent based on its `enabledTools`.

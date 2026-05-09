@@ -157,3 +157,10 @@ export const getAgentLogsByTicket = query({
       .collect();
   },
 });
+
+export const getAgentConfigs = query({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.db.query("agentConfig").collect();
+  },
+});

@@ -58,6 +58,7 @@ export default defineSchema({
     ticketId: v.id("tickets"),
     author: v.string(),
     content: v.string(),
+    mentions: v.optional(v.array(v.string())),
   })
     .index("by_ticket", ["ticketId"])
     .index("by_project_ticket", ["projectId", "ticketId"]),
