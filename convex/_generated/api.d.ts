@@ -8,8 +8,12 @@
  * @module
  */
 
+import type * as crons from "../crons.js";
+import type * as dispatch from "../dispatch.js";
+import type * as escalation from "../escalation.js";
 import type * as mutations from "../mutations.js";
 import type * as queries from "../queries.js";
+import type * as seedAgentConfig from "../seedAgentConfig.js";
 import type * as seedSkills from "../seedSkills.js";
 import type * as skills from "../skills.js";
 
@@ -20,8 +24,12 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  crons: typeof crons;
+  dispatch: typeof dispatch;
+  escalation: typeof escalation;
   mutations: typeof mutations;
   queries: typeof queries;
+  seedAgentConfig: typeof seedAgentConfig;
   seedSkills: typeof seedSkills;
   skills: typeof skills;
 }>;

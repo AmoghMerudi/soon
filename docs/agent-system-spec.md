@@ -48,16 +48,18 @@
 
 ### Technology Stack
 
-| Component | Technology | Purpose |
-|-----------|-----------|---------|
-| Agent Runtime | `DurableAgent` from `@workflow/ai` | Crash-safe, retryable agent execution |
-| Orchestration | Vercel Workflow SDK (`"use workflow"` / `"use step"`) | Durable step-based workflows |
-| Shared State | Convex (`tickets`, `comments`, `artifacts`, `agentLogs`) | Real-time source of truth |
-| Task Queue | Convex scheduled functions → Workflow `start()` | Ticket-driven agent dispatch |
-| Memory | Mem0 Cloud (semantic) + Convex (structured) | Persistent cross-agent memory |
-| External Tools | Composio MCP | 982+ platform integrations |
-| LLM Provider | OpenAI GPT models via `@ai-sdk/openai` | All agent reasoning |
-| UI Reactivity | Convex reactive queries | Real-time dashboard updates |
+
+| Component      | Technology                                               | Purpose                               |
+| -------------- | -------------------------------------------------------- | ------------------------------------- |
+| Agent Runtime  | `DurableAgent` from `@workflow/ai`                       | Crash-safe, retryable agent execution |
+| Orchestration  | Vercel Workflow SDK (`"use workflow"` / `"use step"`)    | Durable step-based workflows          |
+| Shared State   | Convex (`tickets`, `comments`, `artifacts`, `agentLogs`) | Real-time source of truth             |
+| Task Queue     | Convex scheduled functions → Workflow `start()`          | Ticket-driven agent dispatch          |
+| Memory         | Mem0 Cloud (semantic) + Convex (structured)              | Persistent cross-agent memory         |
+| External Tools | Composio MCP                                             | 982+ platform integrations            |
+| LLM Provider   | OpenAI GPT models via `@ai-sdk/openai`                   | All agent reasoning                   |
+| UI Reactivity  | Convex reactive queries                                  | Real-time dashboard updates           |
+
 
 ---
 
@@ -73,14 +75,17 @@
 
 Mem0 supports four scoping dimensions that map directly to our multi-agent system:
 
-| Dimension | Value | Purpose |
-|-----------|-------|---------|
-| `app_id` | `"0to1"` | System-wide shared memory |
-| `agent_id` | `"ceo"` / `"cto"` / `"cmo"` / `"developer"` / `"designer"` / `"marketing"` | Role-private memory |
-| `user_id` | org/company identifier | Per-organization memory |
-| `run_id` | workflow execution ID | Per-execution context |
+
+| Dimension  | Value                                                                      | Purpose                   |
+| ---------- | -------------------------------------------------------------------------- | ------------------------- |
+| `app_id`   | `"0to1"`                                                                   | System-wide shared memory |
+| `agent_id` | `"ceo"` / `"cto"` / `"cmo"` / `"developer"` / `"designer"` / `"marketing"` | Role-private memory       |
+| `user_id`  | org/company identifier                                                     | Per-organization memory   |
+| `run_id`   | workflow execution ID                                                      | Per-execution context     |
+
 
 **Access patterns:**
+
 - `agent_id` only → role-private memory (developer's codebase patterns, CMO's brand voice)
 - `app_id` only → all shared memory (cross-agent visibility for CEO)
 - `agent_id` + `app_id` + query → semantic search within role, shared context
@@ -104,23 +109,27 @@ await mem0.add(
 
 ### Memory Types by Agent
 
-| Agent | Private Memory Examples | Shared Memory Examples |
-|-------|------------------------|----------------------|
-| CEO | Strategic priorities, stakeholder preferences, resource allocation rationale | Business goals, product direction, cross-team decisions |
-| CTO | Architecture decisions, tech debt tracking, performance baselines | Technical constraints, stack decisions, infrastructure status |
-| CMO | Brand voice guidelines, audience personas, campaign history | Positioning, messaging frameworks, market insights |
-| Developer | Codebase patterns, past bug fixes, dependency decisions | Implementation approaches, API contracts |
-| Designer | Design system choices, color/typography, user research | Brand assets, component patterns |
-| Marketing | Content performance data, engagement patterns | Published content, campaign results |
+
+| Agent     | Private Memory Examples                                                      | Shared Memory Examples                                        |
+| --------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| CEO       | Strategic priorities, stakeholder preferences, resource allocation rationale | Business goals, product direction, cross-team decisions       |
+| CTO       | Architecture decisions, tech debt tracking, performance baselines            | Technical constraints, stack decisions, infrastructure status |
+| CMO       | Brand voice guidelines, audience personas, campaign history                  | Positioning, messaging frameworks, market insights            |
+| Developer | Codebase patterns, past bug fixes, dependency decisions                      | Implementation approaches, API contracts                      |
+| Designer  | Design system choices, color/typography, user research                       | Brand assets, component patterns                              |
+| Marketing | Content performance data, engagement patterns                                | Published content, campaign results                           |
+
 
 ### Mem0 Pricing Path
 
-| Tier | Cost | Capacity | When to Use |
-|------|------|----------|------------|
-| Free | $0 | 10K adds, 1K retrievals | Development |
-| Starter | $19/mo | 50K adds, 5K retrievals | Early testing |
-| Growth | $79/mo | 200K adds, 20K retrievals | Production |
-| Pro | $249/mo | 500K adds, graph memory | Scale (agent relationship modeling) |
+
+| Tier    | Cost    | Capacity                  | When to Use                         |
+| ------- | ------- | ------------------------- | ----------------------------------- |
+| Free    | $0      | 10K adds, 1K retrievals   | Development                         |
+| Starter | $19/mo  | 50K adds, 5K retrievals   | Early testing                       |
+| Growth  | $79/mo  | 200K adds, 20K retrievals | Production                          |
+| Pro     | $249/mo | 500K adds, graph memory   | Scale (agent relationship modeling) |
+
 
 Startup program: 3 months free Pro for companies under $5M funding.
 
@@ -138,6 +147,8 @@ Startup program: 3 months free Pro for companies under $5M funding.
 
 ### CEO Agent
 
+
+
 **Role**: Chief strategist. Receives business goals, decomposes into workstreams, delegates to all agents, reviews outcomes, makes priority calls.
 
 **Model**: `openai/gpt-4o` (via Workflow)
@@ -145,6 +156,7 @@ Startup program: 3 months free Pro for companies under $5M funding.
 **Runtime**: `DurableAgent` from `@workflow/ai`
 
 **Personality**:
+
 - Think like a startup CEO — bias toward action, speed, and iteration
 - Focus on business outcomes, not implementation details
 - Make clear priority calls when resources conflict
@@ -152,36 +164,42 @@ Startup program: 3 months free Pro for companies under $5M funding.
 
 **Native Tools (Convex):**
 
-| Tool | Action |
-|------|--------|
-| `createTicket` | Create work items with title, description, priority, tags, assignment |
-| `assignTicket` | Assign/reassign tickets to agents |
-| `updateTicketStatus` | Move tickets through workflow states |
-| `addComment` | Add strategic context or feedback to tickets |
-| `getTicketsByStatus` | Query tickets by status for pipeline visibility |
-| `getTicketsByAssignee` | See what each agent is working on |
-| `reviewArtifact` | Review completed work and approve/request changes |
-| `createSubTicket` | Break tickets into sub-tasks (max depth: 3) |
+
+| Tool                   | Action                                                                |
+| ---------------------- | --------------------------------------------------------------------- |
+| `createTicket`         | Create work items with title, description, priority, tags, assignment |
+| `assignTicket`         | Assign/reassign tickets to agents                                     |
+| `updateTicketStatus`   | Move tickets through workflow states                                  |
+| `addComment`           | Add strategic context or feedback to tickets                          |
+| `getTicketsByStatus`   | Query tickets by status for pipeline visibility                       |
+| `getTicketsByAssignee` | See what each agent is working on                                     |
+| `reviewArtifact`       | Review completed work and approve/request changes                     |
+| `createSubTicket`      | Break tickets into sub-tasks (max depth: 3)                           |
+
 
 **Composio Tools:**
 
-| Tool | Purpose |
-|------|---------|
-| Slack | Send announcements, read team updates |
-| Google Calendar | Schedule reviews, check availability |
-| Google Docs / Notion | Read/write strategic documents, PRDs |
-| Google Sheets / Airtable | Access business metrics, OKRs |
-| Gmail / Outlook | Draft external communications |
-| Stripe | Check revenue metrics, subscription data |
-| Linear / Jira | Sync with external project management |
+
+| Tool                     | Purpose                                  |
+| ------------------------ | ---------------------------------------- |
+| Slack                    | Send announcements, read team updates    |
+| Google Calendar          | Schedule reviews, check availability     |
+| Google Docs / Notion     | Read/write strategic documents, PRDs     |
+| Google Sheets / Airtable | Access business metrics, OKRs            |
+| Gmail / Outlook          | Draft external communications            |
+| Stripe                   | Check revenue metrics, subscription data |
+| Linear / Jira            | Sync with external project management    |
+
 
 **Mem0 Scoping:**
+
 - Reads: `app_id="0to1"` (sees all shared memory)
 - Writes: `agent_id="ceo"` + `app_id="0to1"`
 
 **Trigger**: User input (business idea, directive) or scheduled review cycle (cron)
 
 **Safety Rails:**
+
 - Max 20 steps per workflow execution
 - Max 10 tickets created per single execution
 - Cannot directly execute code, create designs, or post to social media
@@ -197,6 +215,7 @@ Startup program: 3 months free Pro for companies under $5M funding.
 **Runtime**: `DurableAgent` from `@workflow/ai`
 
 **Personality**:
+
 - Think like a pragmatic CTO — balance technical excellence with shipping speed
 - Make architecture decisions with clear tradeoff analysis
 - Push back on scope creep with technical reasoning
@@ -204,36 +223,42 @@ Startup program: 3 months free Pro for companies under $5M funding.
 
 **Native Tools (Convex):**
 
-| Tool | Action |
-|------|--------|
-| `createTicket` | Create technical tickets with architecture context |
-| `assignTicket` | Assign engineering work to developer agent |
-| `addComment` | Add technical guidance, architecture decisions |
-| `reviewArtifact` | Review PRs, deployments, technical artifacts |
-| `updateTicketStatus` | Approve/reject technical work |
-| `getTicketsByTag` | Filter for `engineering`, `infrastructure`, `security` tags |
-| `createSubTicket` | Break technical stories into implementation tasks |
+
+| Tool                 | Action                                                      |
+| -------------------- | ----------------------------------------------------------- |
+| `createTicket`       | Create technical tickets with architecture context          |
+| `assignTicket`       | Assign engineering work to developer agent                  |
+| `addComment`         | Add technical guidance, architecture decisions              |
+| `reviewArtifact`     | Review PRs, deployments, technical artifacts                |
+| `updateTicketStatus` | Approve/reject technical work                               |
+| `getTicketsByTag`    | Filter for `engineering`, `infrastructure`, `security` tags |
+| `createSubTicket`    | Break technical stories into implementation tasks           |
+
 
 **Composio Tools:**
 
-| Tool | Purpose |
-|------|---------|
-| GitHub | Review PRs, check CI status, read code, manage repos |
-| Linear / Jira | Technical sprint management |
-| Sentry | Monitor error rates, review exceptions |
-| New Relic | Infrastructure monitoring, APM |
-| Notion | Technical documentation, ADRs |
-| Slack | Technical discussions, incident channels |
-| PostHog / Mixpanel | Product analytics for technical decisions |
-| Vercel | Deployment status, environment management |
+
+| Tool               | Purpose                                              |
+| ------------------ | ---------------------------------------------------- |
+| GitHub             | Review PRs, check CI status, read code, manage repos |
+| Linear / Jira      | Technical sprint management                          |
+| Sentry             | Monitor error rates, review exceptions               |
+| New Relic          | Infrastructure monitoring, APM                       |
+| Notion             | Technical documentation, ADRs                        |
+| Slack              | Technical discussions, incident channels             |
+| PostHog / Mixpanel | Product analytics for technical decisions            |
+| Vercel             | Deployment status, environment management            |
+
 
 **Mem0 Scoping:**
+
 - Reads: `app_id="0to1"` (shared) + `agent_id="cto"` (private)
 - Writes: `agent_id="cto"` + `app_id="0to1"`
 
 **Trigger**: New tickets tagged `engineering` / `infrastructure` / `security`, or CEO delegation
 
 **Safety Rails:**
+
 - Max 15 steps per workflow execution
 - Cannot directly write code, push to repos, or deploy
 - Can only delegate implementation to developer agent
@@ -249,6 +274,7 @@ Startup program: 3 months free Pro for companies under $5M funding.
 **Runtime**: `DurableAgent` from `@workflow/ai`
 
 **Personality**:
+
 - Think like a growth-minded CMO — data-driven decisions with creative instinct
 - Focus on positioning, messaging, and audience understanding
 - Plan campaigns with clear KPIs and measurement criteria
@@ -256,34 +282,40 @@ Startup program: 3 months free Pro for companies under $5M funding.
 
 **Native Tools (Convex):**
 
-| Tool | Action |
-|------|--------|
-| `createTicket` | Create marketing campaigns, content briefs |
-| `assignTicket` | Assign content/campaign work to marketing agent |
-| `addComment` | Add brand guidelines, messaging feedback |
-| `reviewArtifact` | Review content drafts, campaign assets |
-| `updateTicketStatus` | Approve/reject marketing deliverables |
-| `getTicketsByTag` | Filter for `marketing`, `content`, `social`, `email` tags |
-| `createSubTicket` | Break campaigns into individual deliverables |
+
+| Tool                 | Action                                                    |
+| -------------------- | --------------------------------------------------------- |
+| `createTicket`       | Create marketing campaigns, content briefs                |
+| `assignTicket`       | Assign content/campaign work to marketing agent           |
+| `addComment`         | Add brand guidelines, messaging feedback                  |
+| `reviewArtifact`     | Review content drafts, campaign assets                    |
+| `updateTicketStatus` | Approve/reject marketing deliverables                     |
+| `getTicketsByTag`    | Filter for `marketing`, `content`, `social`, `email` tags |
+| `createSubTicket`    | Break campaigns into individual deliverables              |
+
 
 **Composio Tools:**
 
-| Tool | Purpose |
-|------|---------|
-| Google Analytics | Traffic analysis, conversion tracking |
-| Google Search Console | SEO performance, keyword rankings |
-| Google Ads / Meta Ads | Ad spend and performance review |
-| Twitter Analytics | Social engagement metrics |
-| LinkedIn | Professional network analytics |
-| Slack | Marketing team communication |
+
+| Tool                  | Purpose                               |
+| --------------------- | ------------------------------------- |
+| Google Analytics      | Traffic analysis, conversion tracking |
+| Google Search Console | SEO performance, keyword rankings     |
+| Google Ads / Meta Ads | Ad spend and performance review       |
+| Twitter Analytics     | Social engagement metrics             |
+| LinkedIn              | Professional network analytics        |
+| Slack                 | Marketing team communication          |
+
 
 **Mem0 Scoping:**
+
 - Reads: `app_id="0to1"` (shared) + `agent_id="cmo"` (private)
 - Writes: `agent_id="cmo"` + `app_id="0to1"`
 
 **Trigger**: New tickets tagged `marketing` / `content` / `growth`, or CEO delegation
 
 **Safety Rails:**
+
 - Max 15 steps per workflow execution
 - Cannot directly post to social media, send emails, or run ads
 - Can only delegate execution to marketing agent
@@ -299,6 +331,7 @@ Startup program: 3 months free Pro for companies under $5M funding.
 **Runtime**: `DurableAgent` from `@workflow/ai`
 
 **Personality**:
+
 - Think like a senior full-stack engineer — clean, tested, production-ready code
 - Follow existing patterns in the codebase before introducing new ones
 - Write tests alongside implementation
@@ -306,42 +339,50 @@ Startup program: 3 months free Pro for companies under $5M funding.
 
 **Native Tools (Convex):**
 
-| Tool | Action |
-|------|--------|
+
+| Tool                 | Action                                                       |
+| -------------------- | ------------------------------------------------------------ |
 | `updateTicketStatus` | Move ticket through `in_progress` → `in_review` → `resolved` |
-| `addComment` | Add implementation notes, technical decisions |
-| `addArtifact` | Attach PRs, deployment URLs, documentation links |
-| `getTicketDetails` | Read full ticket context including parent tickets |
-| `markBlocked` | Flag blockers with reason (auto-escalates after 5 min) |
+| `addComment`         | Add implementation notes, technical decisions                |
+| `addArtifact`        | Attach PRs, deployment URLs, documentation links             |
+| `getTicketDetails`   | Read full ticket context including parent tickets            |
+| `markBlocked`        | Flag blockers with reason (auto-escalates after 5 min)       |
+
 
 **Composio Tools:**
 
-| Tool | Purpose |
-|------|---------|
-| GitHub | Create branches, commit code, open PRs, manage issues |
-| Vercel | Deploy previews, check build status, manage env vars |
-| Sentry | Check for errors after deployment |
-| Convex | Database operations, schema changes, mutations |
-| npm / Package registries | Dependency management |
-| Postman | API testing and validation |
+
+| Tool                     | Purpose                                               |
+| ------------------------ | ----------------------------------------------------- |
+| GitHub                   | Create branches, commit code, open PRs, manage issues |
+| Vercel                   | Deploy previews, check build status, manage env vars  |
+| Sentry                   | Check for errors after deployment                     |
+| Convex                   | Database operations, schema changes, mutations        |
+| npm / Package registries | Dependency management                                 |
+| Postman                  | API testing and validation                            |
+
 
 **Dedicated Execution Tools:**
 
-| Tool | Purpose |
-|------|---------|
-| E2B Sandbox | Isolated code execution environment |
-| Code Interpreter | Run and test code snippets |
-| File System (sandboxed) | Read/write project files |
-| Shell (sandboxed) | Run build, test, lint commands |
-| Firecrawl | Scrape documentation for reference |
+
+| Tool                    | Purpose                             |
+| ----------------------- | ----------------------------------- |
+| E2B Sandbox             | Isolated code execution environment |
+| Code Interpreter        | Run and test code snippets          |
+| File System (sandboxed) | Read/write project files            |
+| Shell (sandboxed)       | Run build, test, lint commands      |
+| Firecrawl               | Scrape documentation for reference  |
+
 
 **Mem0 Scoping:**
+
 - Reads: `agent_id="developer"` (own context) + `agent_id="cto"` (technical guidance)
 - Writes: `agent_id="developer"` + `app_id="0to1"`
 
 **Trigger**: Ticket assigned with tags `engineering` / `infrastructure` / `bug`
 
 **Safety Rails:**
+
 - Max 30 steps per workflow (engineering tasks are more complex)
 - All code execution in sandboxed environment (E2B)
 - PR required for all code changes (no direct pushes to main)
@@ -359,6 +400,7 @@ Startup program: 3 months free Pro for companies under $5M funding.
 **Runtime**: `DurableAgent` from `@workflow/ai`
 
 **Personality**:
+
 - Think like a product designer — user-centered, detail-oriented, systematic
 - Follow the existing design system before introducing new patterns
 - Consider accessibility, responsiveness, and performance
@@ -366,43 +408,51 @@ Startup program: 3 months free Pro for companies under $5M funding.
 
 **Native Tools (Convex):**
 
-| Tool | Action |
-|------|--------|
-| `updateTicketStatus` | Move ticket through design workflow states |
-| `addComment` | Add design rationale, alternatives considered |
-| `addArtifact` | Attach Figma links, mockup images, design tokens |
-| `getTicketDetails` | Read full context including brand guidelines |
-| `markBlocked` | Flag blockers (missing brand assets, unclear requirements) |
+
+| Tool                 | Action                                                     |
+| -------------------- | ---------------------------------------------------------- |
+| `updateTicketStatus` | Move ticket through design workflow states                 |
+| `addComment`         | Add design rationale, alternatives considered              |
+| `addArtifact`        | Attach Figma links, mockup images, design tokens           |
+| `getTicketDetails`   | Read full context including brand guidelines               |
+| `markBlocked`        | Flag blockers (missing brand assets, unclear requirements) |
+
 
 **Composio Tools:**
 
-| Tool | Purpose |
-|------|---------|
-| Figma | Create/update designs, components, prototypes |
-| Miro / Mural | Wireframing, user flow mapping |
-| Canva | Quick visual assets, social graphics |
-| Cloudinary | Image optimization, asset management |
-| ImageKit | Image transformation, CDN delivery |
-| Remove.bg | Background removal for product images |
-| Brandfetch | Brand asset retrieval |
-| Google Drive | Asset storage and sharing |
+
+| Tool         | Purpose                                       |
+| ------------ | --------------------------------------------- |
+| Figma        | Create/update designs, components, prototypes |
+| Miro / Mural | Wireframing, user flow mapping                |
+| Canva        | Quick visual assets, social graphics          |
+| Cloudinary   | Image optimization, asset management          |
+| ImageKit     | Image transformation, CDN delivery            |
+| Remove.bg    | Background removal for product images         |
+| Brandfetch   | Brand asset retrieval                         |
+| Google Drive | Asset storage and sharing                     |
+
 
 **Dedicated Execution Tools:**
 
-| Tool | Purpose |
-|------|---------|
-| GPT Image Gen 2 (via OpenAI) | Generate concept art, illustrations, icons |
-| Code Interpreter | Generate CSS/Tailwind design tokens |
-| File System (sandboxed) | Write component code (React/Tailwind) |
-| Firecrawl | Research design inspiration, competitor analysis |
+
+| Tool                         | Purpose                                          |
+| ---------------------------- | ------------------------------------------------ |
+| GPT Image Gen 2 (via OpenAI) | Generate concept art, illustrations, icons       |
+| Code Interpreter             | Generate CSS/Tailwind design tokens              |
+| File System (sandboxed)      | Write component code (React/Tailwind)            |
+| Firecrawl                    | Research design inspiration, competitor analysis |
+
 
 **Mem0 Scoping:**
+
 - Reads: `agent_id="designer"` (own context) + `agent_id="cmo"` (brand guidance)
 - Writes: `agent_id="designer"` + `app_id="0to1"`
 
 **Trigger**: Ticket assigned with tags `design` / `ui` / `brand`
 
 **Safety Rails:**
+
 - Max 20 steps per workflow
 - Max 5 active tickets at a time
 - Design artifacts must be reviewed by CTO (system design) or CMO (brand) before implementation
@@ -419,6 +469,7 @@ Startup program: 3 months free Pro for companies under $5M funding.
 **Runtime**: `DurableAgent` from `@workflow/ai`
 
 **Personality**:
+
 - Think like a growth marketer — test-driven, data-informed, creative
 - Write in the brand voice established by CMO
 - Optimize for engagement and conversion
@@ -426,52 +477,60 @@ Startup program: 3 months free Pro for companies under $5M funding.
 
 **Native Tools (Convex):**
 
-| Tool | Action |
-|------|--------|
-| `updateTicketStatus` | Move ticket through content workflow states |
-| `addComment` | Add content drafts, performance metrics |
-| `addArtifact` | Attach published URLs, campaign reports, analytics screenshots |
-| `getTicketDetails` | Read full context including campaign briefs |
-| `markBlocked` | Flag blockers (missing assets, pending approvals) |
+
+| Tool                 | Action                                                         |
+| -------------------- | -------------------------------------------------------------- |
+| `updateTicketStatus` | Move ticket through content workflow states                    |
+| `addComment`         | Add content drafts, performance metrics                        |
+| `addArtifact`        | Attach published URLs, campaign reports, analytics screenshots |
+| `getTicketDetails`   | Read full context including campaign briefs                    |
+| `markBlocked`        | Flag blockers (missing assets, pending approvals)              |
+
 
 **Composio Tools:**
 
-| Tool | Purpose |
-|------|---------|
-| Twitter / X | Post tweets, threads, engage with audience |
-| LinkedIn | Publish articles, company updates |
-| Instagram / TikTok | Visual content posting |
-| Reddit | Community engagement, product launches |
-| YouTube | Video descriptions, metadata |
-| Typefully | Draft and schedule Twitter threads |
-| Mailchimp / Klaviyo / SendGrid | Create and send email campaigns |
-| Brevo / Customer.io | Marketing automation sequences |
-| Google Ads / Meta Ads | Create and manage ad campaigns |
-| Google Search Console | Submit sitemaps, monitor indexing |
-| Ahrefs / Semrush | Keyword research for content |
-| WordPress / Webflow | Publish blog posts, landing pages |
-| Hashnode / DEV Community | Developer community content |
-| Canva | Create visual assets for posts |
-| Buffer / Ayrshare | Cross-platform social scheduling |
-| Apollo / Hunter | Lead enrichment for outbound campaigns |
-| Lemlist / Instantly | Outbound email sequences |
-| Google Analytics | Campaign performance tracking |
+
+| Tool                           | Purpose                                    |
+| ------------------------------ | ------------------------------------------ |
+| Twitter / X                    | Post tweets, threads, engage with audience |
+| LinkedIn                       | Publish articles, company updates          |
+| Instagram / TikTok             | Visual content posting                     |
+| Reddit                         | Community engagement, product launches     |
+| YouTube                        | Video descriptions, metadata               |
+| Typefully                      | Draft and schedule Twitter threads         |
+| Mailchimp / Klaviyo / SendGrid | Create and send email campaigns            |
+| Brevo / Customer.io            | Marketing automation sequences             |
+| Google Ads / Meta Ads          | Create and manage ad campaigns             |
+| Google Search Console          | Submit sitemaps, monitor indexing          |
+| Ahrefs / Semrush               | Keyword research for content               |
+| WordPress / Webflow            | Publish blog posts, landing pages          |
+| Hashnode / DEV Community       | Developer community content                |
+| Canva                          | Create visual assets for posts             |
+| Buffer / Ayrshare              | Cross-platform social scheduling           |
+| Apollo / Hunter                | Lead enrichment for outbound campaigns     |
+| Lemlist / Instantly            | Outbound email sequences                   |
+| Google Analytics               | Campaign performance tracking              |
+
 
 **Dedicated Execution Tools:**
 
-| Tool | Purpose |
-|------|---------|
-| Code Interpreter | Generate analytics reports, data processing |
-| Firecrawl | Competitive content research, trend analysis |
-| Web Search | Research topics, find trending content |
+
+| Tool             | Purpose                                      |
+| ---------------- | -------------------------------------------- |
+| Code Interpreter | Generate analytics reports, data processing  |
+| Firecrawl        | Competitive content research, trend analysis |
+| Web Search       | Research topics, find trending content       |
+
 
 **Mem0 Scoping:**
+
 - Reads: `agent_id="marketing"` (own context) + `agent_id="cmo"` (strategy, brand voice)
 - Writes: `agent_id="marketing"` + `app_id="0to1"`
 
 **Trigger**: Ticket assigned with tags `content` / `social` / `email` / `seo` / `ads`
 
 **Safety Rails:**
+
 - Max 20 steps per workflow
 - Max 5 active tickets at a time
 - All external-facing content must be reviewed by CMO before publishing
@@ -508,25 +567,29 @@ const developerTools = await getComposioTools({
 
 **Phase 1 — MVP (launch with these):**
 
-| Agent | Composio Tools |
-|-------|---------------|
-| CEO | Slack, Google Docs, Google Sheets, Linear |
-| CTO | GitHub, Sentry, Slack, Linear |
-| CMO | Google Analytics, Slack, Google Ads |
-| Developer | GitHub, Vercel, Convex |
-| Designer | Figma, Cloudinary |
+
+| Agent     | Composio Tools                                   |
+| --------- | ------------------------------------------------ |
+| CEO       | Slack, Google Docs, Google Sheets, Linear        |
+| CTO       | GitHub, Sentry, Slack, Linear                    |
+| CMO       | Google Analytics, Slack, Google Ads              |
+| Developer | GitHub, Vercel, Convex                           |
+| Designer  | Figma, Cloudinary                                |
 | Marketing | Twitter/X, LinkedIn, Mailchimp, Google Analytics |
+
 
 **Phase 2 — Growth (add as needed):**
 
-| Agent | Composio Tools |
-|-------|---------------|
-| CEO | Stripe, Google Calendar, Gmail |
-| CTO | New Relic, Vercel, Notion |
-| CMO | Meta Ads, Twitter Analytics, LinkedIn |
-| Developer | E2B Sandbox, Sentry, Postman |
-| Designer | Miro, Canva, ImageKit, Remove.bg |
+
+| Agent     | Composio Tools                                |
+| --------- | --------------------------------------------- |
+| CEO       | Stripe, Google Calendar, Gmail                |
+| CTO       | New Relic, Vercel, Notion                     |
+| CMO       | Meta Ads, Twitter Analytics, LinkedIn         |
+| Developer | E2B Sandbox, Sentry, Postman                  |
+| Designer  | Miro, Canva, ImageKit, Remove.bg              |
 | Marketing | SendGrid, Ayrshare, Reddit, WordPress, Apollo |
+
 
 ### Full Composio Catalog by Agent
 
@@ -656,24 +719,26 @@ Each agent can ONLY access tools defined in its specification. Enforced at three
 
 ### Permission Matrix
 
-| Capability | CEO | CTO | CMO | Dev | Design | Mkt |
-|-----------|:---:|:---:|:---:|:---:|:------:|:---:|
-| Create tickets | Y | Y | Y | - | - | - |
-| Assign tickets | Y | Y | Y | - | - | - |
-| Update own ticket status | Y | Y | Y | Y | Y | Y |
-| Review/approve work | Y | Y | Y | - | - | - |
-| Create sub-tickets | Y | Y | Y | - | - | - |
-| Write code | - | - | - | Y | - | - |
-| Push to GitHub | - | - | - | Y | - | - |
-| Deploy to Vercel | - | - | - | Y | - | - |
-| Edit Figma | - | - | - | - | Y | - |
-| Post to social media | - | - | - | - | - | Y |
-| Send email campaigns | - | - | - | - | - | Y |
-| Run ad campaigns | - | - | - | - | - | Y |
-| Access CRM | Y | - | Y | - | - | Y |
-| View all agent memory | Y | - | - | - | - | - |
-| View technical memory | - | Y | - | Y | - | - |
-| View brand memory | - | - | Y | - | Y | Y |
+
+| Capability               | CEO | CTO | CMO | Dev | Design | Mkt |
+| ------------------------ | --- | --- | --- | --- | ------ | --- |
+| Create tickets           | Y   | Y   | Y   | -   | -      | -   |
+| Assign tickets           | Y   | Y   | Y   | -   | -      | -   |
+| Update own ticket status | Y   | Y   | Y   | Y   | Y      | Y   |
+| Review/approve work      | Y   | Y   | Y   | -   | -      | -   |
+| Create sub-tickets       | Y   | Y   | Y   | -   | -      | -   |
+| Write code               | -   | -   | -   | Y   | -      | -   |
+| Push to GitHub           | -   | -   | -   | Y   | -      | -   |
+| Deploy to Vercel         | -   | -   | -   | Y   | -      | -   |
+| Edit Figma               | -   | -   | -   | -   | Y      | -   |
+| Post to social media     | -   | -   | -   | -   | -      | Y   |
+| Send email campaigns     | -   | -   | -   | -   | -      | Y   |
+| Run ad campaigns         | -   | -   | -   | -   | -      | Y   |
+| Access CRM               | Y   | -   | Y   | -   | -      | Y   |
+| View all agent memory    | Y   | -   | -   | -   | -      | -   |
+| View technical memory    | -   | Y   | -   | Y   | -      | -   |
+| View brand memory        | -   | -   | Y   | -   | Y      | Y   |
+
 
 ### Dynamic Tool Gating
 
@@ -778,3 +843,4 @@ agentConfig: defineTable({
 }).index("by_agentId", ["agentId"])
   .index("by_status", ["status"]),
 ```
+
