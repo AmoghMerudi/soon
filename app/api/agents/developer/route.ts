@@ -5,8 +5,14 @@ import { getComposioToolsForAgent } from "@/lib/agents/composio";
 import { createE2BTools } from "@/lib/agents/e2b-tools";
 import { getConvexClient } from "@/lib/agent/convex-client";
 import { api } from "@/convex/_generated/api";
+import {
+  recallMemories,
+  formatRecalledForPrompt,
+  mem0Tools,
+} from "@/lib/agents/mem0";
 
 const DEVELOPER_ENTITY_ID = "developer";
+const DEVELOPER_AGENT_ID = "developer";
 const DEVELOPER_TOOLKITS = ["github", "vercel"];
 
 export const maxDuration = 300;
@@ -44,6 +50,10 @@ Sandbox tools (E2B):
 - The sandbox is fresh per ticket — clone any repo you need to work on at the start.
 - Don't run destructive commands outside the sandbox; the sandbox is your only execution environment.
 
+Memory:
+- Use recall_memory at the start of a ticket to surface prior decisions, preferences, or patterns from earlier work in this project.
+- Use save_memory at the end to persist concise facts worth remembering (one sentence each): naming conventions agreed upon, repos used, preferred PR title formats, deploy quirks. Never save ephemeral details.
+
 Constraints:
 - You are NEVER allowed to push directly to the main branch — all code changes go through pull requests.
 - Stay within 30 steps per ticket. If you need more, mark the ticket blocked and ask the CTO for guidance.
@@ -51,14 +61,14 @@ Constraints:
 Do exactly one ticket per invocation. Do not create new tickets.`;
 
 export async function POST(request: Request) {
-  const { ticketId } = await request.json();
+  const { ticketId, projectId } = await request.json();
 
   if (!ticketId || typeof ticketId !== "string") {
     return Response.json({ error: "Missing 'ticketId' field" }, { status: 400 });
   }
 
   // Fire-and-forget: respond to the dispatcher immediately, run the agent in the background.
-  void runDeveloperAgent(ticketId).catch(async (err) => {
+  void runDeveloperAgent(ticketId, projectId).catch(async (err) => {
     console.error("[developer-agent] failed:", err);
     try {
       const convex = getConvexClient();
@@ -67,6 +77,7 @@ export async function POST(request: Request) {
         action: "agent_error",
         details: err instanceof Error ? err.message : String(err),
         ticketId: ticketId as never,
+        ...(projectId ? { projectId: projectId as never } : {}),
       });
     } catch {}
   });
@@ -74,13 +85,24 @@ export async function POST(request: Request) {
   return Response.json({ ok: true, ticketId });
 }
 
-async function runDeveloperAgent(ticketId: string) {
+async function runDeveloperAgent(ticketId: string, providedProjectId?: string) {
   const convex = getConvexClient();
+
+  // Resolve projectId from ticket if not supplied by dispatcher.
+  let projectId = providedProjectId;
+  if (!projectId) {
+    const ticket = await convex.query(api.queries.getTicket, {
+      ticketId: ticketId as never,
+    });
+    projectId = (ticket as { projectId?: string } | null)?.projectId;
+  }
+
   await convex.mutation(api.mutations.logAgentAction, {
     agent: "Developer",
     action: "agent_started",
     details: `Picked up ticket ${ticketId}`,
     ticketId: ticketId as never,
+    ...(projectId ? { projectId: projectId as never } : {}),
   });
 
   let composioTools = {};
@@ -95,25 +117,45 @@ async function runDeveloperAgent(ticketId: string) {
       action: "composio_unavailable",
       details: `Composio tools not loaded: ${err instanceof Error ? err.message : String(err)}`,
       ticketId: ticketId as never,
+      ...(projectId ? { projectId: projectId as never } : {}),
     });
   }
 
   const e2b = createE2BTools();
 
+  // Recall prior memories scoped to (project, agent) for the system prompt.
+  let memoryBlock = "";
+  if (projectId) {
+    const ticketDetails = await convex.query(api.queries.getTicketDetails, {
+      ticketId: ticketId as never,
+    });
+    const seed = ticketDetails?.ticket
+      ? `${ticketDetails.ticket.title}\n${ticketDetails.ticket.description}`
+      : "";
+    const recalled = await recallMemories(projectId, DEVELOPER_AGENT_ID, seed, 6);
+    memoryBlock = formatRecalledForPrompt(recalled);
+  }
+
+  const memTools = projectId
+    ? mem0Tools(projectId, DEVELOPER_AGENT_ID)
+    : {};
+
   const composioToolNames = Object.keys(composioTools);
   const e2bToolNames = Object.keys(e2b.tools);
+  const memToolNames = Object.keys(memTools);
   await convex.mutation(api.mutations.logAgentAction, {
     agent: "Developer",
     action: "tools_loaded",
-    details: `Composio (${composioToolNames.length}): ${composioToolNames.slice(0, 6).join(", ")}${composioToolNames.length > 6 ? "..." : ""} | E2B (${e2bToolNames.length}): ${e2bToolNames.join(", ")}`,
+    details: `Composio (${composioToolNames.length}): ${composioToolNames.slice(0, 6).join(", ")}${composioToolNames.length > 6 ? "..." : ""} | E2B (${e2bToolNames.length}): ${e2bToolNames.join(", ")} | Mem0 (${memToolNames.length}): ${memToolNames.join(", ")}`,
     ticketId: ticketId as never,
+    ...(projectId ? { projectId: projectId as never } : {}),
   });
 
   try {
     const result = await generateText({
       model: openai("gpt-4o"),
-      system: DEVELOPER_SYSTEM_PROMPT,
-      tools: { ...developerTools, ...composioTools, ...e2b.tools },
+      system: DEVELOPER_SYSTEM_PROMPT + memoryBlock,
+      tools: { ...developerTools, ...composioTools, ...e2b.tools, ...memTools },
       stopWhen: stepCountIs(30),
       prompt: `You have been assigned ticket ${ticketId}. Read it with getTicketDetails, do the work, and hand it off for review. Move the ticket to in_review when done.`,
     });
@@ -123,6 +165,7 @@ async function runDeveloperAgent(ticketId: string) {
       action: "agent_finished",
       details: `Steps: ${result.steps.length}, finishReason: ${result.finishReason}`,
       ticketId: ticketId as never,
+      ...(projectId ? { projectId: projectId as never } : {}),
     });
   } finally {
     await e2b.dispose();

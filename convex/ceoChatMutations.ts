@@ -1,11 +1,15 @@
 import { mutation } from "./_generated/server";
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 
 export const createThread = mutation({
-  args: { title: v.string() },
+  args: {
+    projectId: v.id("projects"),
+    title: v.string(),
+  },
   handler: async (ctx, args) => {
     const now = Date.now();
     return await ctx.db.insert("ceoChatThreads", {
+      projectId: args.projectId,
       title: args.title,
       preview: "",
       createdAt: now,
@@ -36,8 +40,11 @@ export const saveMessage = mutation({
     serialized: v.string(),
   },
   handler: async (ctx, args) => {
+    const thread = await ctx.db.get(args.threadId);
+    if (!thread) throw new ConvexError("thread not found");
     const now = Date.now();
     await ctx.db.insert("ceoChatMessages", {
+      projectId: thread.projectId,
       threadId: args.threadId,
       messageId: args.messageId,
       role: args.role,

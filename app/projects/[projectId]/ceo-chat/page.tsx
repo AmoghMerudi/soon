@@ -8,6 +8,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { Avatar, Btn, Eyebrow } from "@/lib/dashboard/primitives";
+import { useProjectId } from "@/lib/dashboard/project-context";
 
 function ChatBubble({
   role,
@@ -488,9 +489,11 @@ function deserializeMessages(
 function ChatArea({
   threadId,
   savedMessages,
+  projectId,
 }: {
   threadId: Id<"ceoChatThreads"> | null;
   savedMessages: Array<{ serialized?: string; content?: string; role?: string; _id?: string }>;
+  projectId: Id<"projects">;
 }) {
   const saveMessage = useMutation(api.ceoChatMutations.saveMessage);
   const updateTitle = useMutation(api.ceoChatMutations.updateThreadTitle);
@@ -513,6 +516,18 @@ function ChatArea({
         onChatEnd: () => {
           runIdRef.current = null;
         },
+        prepareSendMessagesRequest: ({
+          messages,
+          body,
+          headers,
+          credentials,
+          api: chatApi,
+        }) => ({
+          api: chatApi,
+          headers,
+          credentials,
+          body: { ...(body ?? {}), messages, projectId },
+        }),
         prepareReconnectToStreamRequest: ({ api, ...rest }) => {
           const id = runIdRef.current;
           if (!id) throw new Error("No active workflow run ID");
@@ -522,7 +537,7 @@ function ChatArea({
           };
         },
       }),
-    []
+    [projectId]
   );
 
   const { messages, sendMessage, status, stop } = useChat({
@@ -713,7 +728,8 @@ function ChatArea({
 }
 
 export default function CeoChatPage() {
-  const threads = useQuery(api.ceoChatQueries.listThreads) ?? [];
+  const projectId = useProjectId();
+  const threads = useQuery(api.ceoChatQueries.listThreads, { projectId }) ?? [];
   const createThread = useMutation(api.ceoChatMutations.createThread);
   const deleteThread = useMutation(api.ceoChatMutations.deleteThread);
 
@@ -738,7 +754,7 @@ export default function CeoChatPage() {
   );
 
   const handleNewChat = async () => {
-    const id = await createThread({ title: "New conversation" });
+    const id = await createThread({ projectId, title: "New conversation" });
     setActiveThreadId(id);
   };
 
@@ -860,6 +876,7 @@ export default function CeoChatPage() {
               key={activeThreadId ?? "empty"}
               threadId={activeThreadId}
               savedMessages={savedMessages}
+              projectId={projectId}
             />
           )}
         </div>

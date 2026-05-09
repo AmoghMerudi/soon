@@ -9,10 +9,16 @@ import { ceoChatWorkflow } from "@/lib/agents/ceo/workflow";
 export const maxDuration = 120;
 
 export async function POST(req: Request) {
-  const { messages }: { messages: UIMessage[] } = await req.json();
+  const { messages, projectId }: { messages: UIMessage[]; projectId?: string } =
+    await req.json();
+
+  if (!projectId || typeof projectId !== "string") {
+    return Response.json({ error: "Missing 'projectId'" }, { status: 400 });
+  }
+
   const modelMessages = await convertToModelMessages(messages);
 
-  const run = await start(ceoChatWorkflow, [modelMessages]);
+  const run = await start(ceoChatWorkflow, [projectId, modelMessages]);
 
   return createUIMessageStreamResponse({
     stream: run.readable,

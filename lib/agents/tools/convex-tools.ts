@@ -7,6 +7,7 @@ const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 // --- Step functions (each uses "use step" for durability and retries) ---
 
 async function createTicketStep(input: {
+  projectId: string;
   title: string;
   description: string;
   priority: "critical" | "high" | "medium" | "low";
@@ -19,6 +20,7 @@ async function createTicketStep(input: {
   "use step";
 
   const ticketId = await convex.mutation(api.mutations.createTicket, {
+    projectId: input.projectId as any,
     title: input.title,
     description: input.description,
     status: "backlog",
@@ -96,10 +98,14 @@ async function addArtifactStep(input: {
   return artifactId;
 }
 
-async function getMyTicketsStep(input: { assignee: string }) {
+async function getMyTicketsStep(input: {
+  projectId: string;
+  assignee: string;
+}) {
   "use step";
 
   const tickets = await convex.query(api.queries.getTicketsByAssignee, {
+    projectId: input.projectId as any,
     assignee: input.assignee,
   });
 
@@ -113,6 +119,7 @@ export const convexTools = {
     description:
       "Create a new ticket in the project management system. Always set status to backlog. Provide your agent name in the agentName field.",
     inputSchema: z.object({
+      projectId: z.string(),
       title: z.string(),
       description: z.string(),
       priority: z.enum(["critical", "high", "medium", "low"]),
@@ -162,6 +169,7 @@ export const convexTools = {
   getMyTickets: {
     description: "Get all tickets assigned to a specific agent or person.",
     inputSchema: z.object({
+      projectId: z.string(),
       assignee: z.string(),
     }),
     execute: getMyTicketsStep,

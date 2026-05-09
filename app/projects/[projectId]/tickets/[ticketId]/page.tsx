@@ -153,9 +153,13 @@ function PropertyRow({
 }
 
 export default function TicketDetailPage() {
-  const { ticketId } = useParams<{ ticketId: string }>();
+  const { ticketId, projectId } = useParams<{
+    ticketId: string;
+    projectId: string;
+  }>();
   const router = useRouter();
   const id = ticketId as Id<"tickets">;
+  const ticketsHref = `/projects/${projectId}/tickets`;
 
   const ticket = useQuery(api.queries.getTicket, { ticketId: id });
   const comments = useQuery(api.queries.getTicketComments, { ticketId: id });
@@ -229,7 +233,7 @@ export default function TicketDetailPage() {
           Ticket not found
         </span>
         <button
-          onClick={() => router.push("/dashboard/tickets")}
+          onClick={() => router.push(ticketsHref)}
           className="font-mono cursor-pointer"
           style={{
             background: "transparent",
@@ -263,7 +267,7 @@ export default function TicketDetailPage() {
           }}
         >
           <button
-            onClick={() => router.push("/dashboard/tickets")}
+            onClick={() => router.push(ticketsHref)}
             className="font-mono cursor-pointer inline-flex items-center gap-1.5"
             style={{
               background: "transparent",

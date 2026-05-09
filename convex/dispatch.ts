@@ -27,14 +27,16 @@ export const dispatchAgent = internalAction({
   args: {
     ticketId: v.id("tickets"),
     agentRole: v.string(),
+    projectId: v.optional(v.id("projects")),
   },
-  handler: async (ctx, { ticketId, agentRole }) => {
+  handler: async (ctx, { ticketId, agentRole, projectId }) => {
     if (!WIRED_AGENTS.has(agentRole)) {
       await ctx.runMutation(internal.mutations._logAgentActionInternal, {
         agent: agentRole,
         action: "dispatched",
         details: `Stub dispatch (no route wired) for ${agentRole}, ticket ${ticketId}`,
         ticketId,
+        projectId,
       });
       return;
     }
@@ -46,6 +48,7 @@ export const dispatchAgent = internalAction({
         action: "dispatch_error",
         details: "APP_BASE_URL not set; cannot reach agent route",
         ticketId,
+        projectId,
       });
       return;
     }
@@ -54,7 +57,7 @@ export const dispatchAgent = internalAction({
     const response = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ticketId }),
+      body: JSON.stringify({ ticketId, projectId }),
     });
 
     if (!response.ok) {
@@ -64,6 +67,7 @@ export const dispatchAgent = internalAction({
         action: "dispatch_error",
         details: `${response.status} ${response.statusText} ${body.slice(0, 200)}`,
         ticketId,
+        projectId,
       });
       return;
     }
@@ -74,6 +78,7 @@ export const dispatchAgent = internalAction({
       action: "dispatched",
       details: `Started workflow${data.runId ? ` runId=${data.runId}` : ""} for ticket ${ticketId}`,
       ticketId,
+      projectId,
     });
   },
 });
