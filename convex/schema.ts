@@ -53,6 +53,5 @@ export default defineSchema({
     details: v.string(),
     ticketId: v.optional(v.id("tickets")),
   })
-    .index("by_ticket", ["ticketId"])
-    .index("by_creation_time", ["_creationTime"]),
+    .index("by_ticket", ["ticketId"]),
 });
