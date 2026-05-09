@@ -2,6 +2,7 @@ import { generateText, stepCountIs } from "ai";
 import { openai } from "@ai-sdk/openai";
 import { developerTools } from "@/lib/agents/developer-tools";
 import { getComposioToolsForAgent } from "@/lib/agents/composio";
+import { createE2BTools } from "@/lib/agents/e2b-tools";
 import { getConvexClient } from "@/lib/agent/convex-client";
 import { api } from "@/convex/_generated/api";
 
@@ -36,6 +37,12 @@ Vercel tools (when available):
 - Poll deployment status until it's READY or ERROR — don't claim done while still BUILDING.
 - Once a preview is READY, attach the deployment URL to the ticket via addArtifact (type: "deployment").
 - If the build fails, read the build logs and add a comment summarizing the error before marking blocked.
+
+Sandbox tools (E2B):
+- All code execution happens through runShell / runCode in the sandbox — never claim something is "tested" without running it there.
+- Use writeFile to scaffold files, runShell for git/build/test/lint, readFile to verify output.
+- The sandbox is fresh per ticket — clone any repo you need to work on at the start.
+- Don't run destructive commands outside the sandbox; the sandbox is your only execution environment.
 
 Constraints:
 - You are NEVER allowed to push directly to the main branch — all code changes go through pull requests.
@@ -91,26 +98,33 @@ async function runDeveloperAgent(ticketId: string) {
     });
   }
 
+  const e2b = createE2BTools();
+
   const composioToolNames = Object.keys(composioTools);
+  const e2bToolNames = Object.keys(e2b.tools);
   await convex.mutation(api.mutations.logAgentAction, {
     agent: "Developer",
     action: "tools_loaded",
-    details: `Composio tools loaded (${composioToolNames.length}): ${composioToolNames.slice(0, 8).join(", ")}${composioToolNames.length > 8 ? "..." : ""}`,
+    details: `Composio (${composioToolNames.length}): ${composioToolNames.slice(0, 6).join(", ")}${composioToolNames.length > 6 ? "..." : ""} | E2B (${e2bToolNames.length}): ${e2bToolNames.join(", ")}`,
     ticketId: ticketId as never,
   });
 
-  const result = await generateText({
-    model: openai("gpt-4o"),
-    system: DEVELOPER_SYSTEM_PROMPT,
-    tools: { ...developerTools, ...composioTools },
-    stopWhen: stepCountIs(30),
-    prompt: `You have been assigned ticket ${ticketId}. Read it with getTicketDetails, do the work, and hand it off for review. Move the ticket to in_review when done.`,
-  });
+  try {
+    const result = await generateText({
+      model: openai("gpt-4o"),
+      system: DEVELOPER_SYSTEM_PROMPT,
+      tools: { ...developerTools, ...composioTools, ...e2b.tools },
+      stopWhen: stepCountIs(30),
+      prompt: `You have been assigned ticket ${ticketId}. Read it with getTicketDetails, do the work, and hand it off for review. Move the ticket to in_review when done.`,
+    });
 
-  await convex.mutation(api.mutations.logAgentAction, {
-    agent: "Developer",
-    action: "agent_finished",
-    details: `Steps: ${result.steps.length}, finishReason: ${result.finishReason}`,
-    ticketId: ticketId as never,
-  });
+    await convex.mutation(api.mutations.logAgentAction, {
+      agent: "Developer",
+      action: "agent_finished",
+      details: `Steps: ${result.steps.length}, finishReason: ${result.finishReason}`,
+      ticketId: ticketId as never,
+    });
+  } finally {
+    await e2b.dispose();
+  }
 }
