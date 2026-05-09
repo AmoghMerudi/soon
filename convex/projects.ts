@@ -33,3 +33,28 @@ export const createProject = mutation({
     });
   },
 });
+
+export const setStripeApiKey = mutation({
+  args: {
+    projectId: v.id("projects"),
+    apiKey: v.string(),
+  },
+  handler: async (ctx, { projectId, apiKey }) => {
+    const trimmed = apiKey.trim();
+    if (!trimmed) throw new ConvexError("Stripe API key required");
+    const project = await ctx.db.get(projectId);
+    if (!project) throw new ConvexError("project not found");
+    await ctx.db.patch(projectId, { stripeApiKey: trimmed });
+    return { ok: true };
+  },
+});
+
+export const clearStripeApiKey = mutation({
+  args: { projectId: v.id("projects") },
+  handler: async (ctx, { projectId }) => {
+    const project = await ctx.db.get(projectId);
+    if (!project) throw new ConvexError("project not found");
+    await ctx.db.patch(projectId, { stripeApiKey: undefined });
+    return { ok: true };
+  },
+});

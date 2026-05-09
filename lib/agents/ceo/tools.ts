@@ -211,6 +211,24 @@ async function loadSkillStep(input: { name: string }) {
   return { name: input.name, instructions: content };
 }
 
+async function saveStripeApiKeyStep(input: {
+  projectId: string;
+  apiKey: string;
+}) {
+  "use step";
+
+  const apiKey = input.apiKey.trim();
+  if (!apiKey) return { error: "Empty API key" };
+  if (!/^sk_(test|live)_/.test(apiKey)) {
+    return {
+      error:
+        "Invalid Stripe key format — expected to start with sk_test_ or sk_live_",
+    };
+  }
+
+  await convex.mutation(api.projects.setStripeApiKey, {
+    projectId: input.projectId as Id<"projects">,
+    apiKey,
 async function storeGithubRepoStep(input: {
   projectId: string;
   repoUrl: string;
@@ -227,6 +245,15 @@ async function storeGithubRepoStep(input: {
 
   await convex.mutation(api.mutations.logAgentAction, {
     agent: "CEO",
+    action: "save_stripe_key",
+    details: `Saved Stripe API key (${apiKey.startsWith("sk_live_") ? "live" : "test"} mode)`,
+    projectId: input.projectId as Id<"projects">,
+  });
+
+  return {
+    ok: true,
+    mode: apiKey.startsWith("sk_live_") ? "live" : "test",
+  };
     action: "github_repo_created",
     details: `GitHub repo created: ${input.owner}/${input.repoName} — ${input.repoUrl}`,
     projectId: input.projectId as Id<"projects">,
@@ -411,6 +438,20 @@ export function buildCeoTools(projectId: Id<"projects">): ToolSet {
         name: z.string().describe("Skill name from the available skills list"),
       }),
       execute: loadSkillStep,
+    },
+
+    saveStripeApiKey: {
+      description:
+        "Store the user's Stripe API key for THIS project so the Revenue dashboard and other agents can pull live data. Call this whenever the user provides a Stripe secret key (sk_test_... or sk_live_...). The key is scoped to the current project only. Do not log or echo the key back to the user — confirm only that it was saved.",
+      inputSchema: z.object({
+        apiKey: z
+          .string()
+          .describe(
+            "The Stripe secret API key the user provided (sk_test_... or sk_live_...)",
+          ),
+      }),
+      execute: (input: { apiKey: string }) =>
+        saveStripeApiKeyStep({ ...input, projectId: pid }),
     },
 
     askQuestion: {

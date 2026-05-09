@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useEffect, useState, useCallback, useMemo } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useChat } from "@ai-sdk/react";
 import type { UIMessage } from "ai";
 import { WorkflowChatTransport } from "@workflow/ai";
@@ -637,10 +638,14 @@ function ChatArea({
   threadId,
   savedMessages,
   projectId,
+  prefill,
+  onPrefillConsumed,
 }: {
   threadId: Id<"ceoChatThreads"> | null;
   savedMessages: Array<{ serialized?: string; content?: string; role?: string; _id?: string }>;
   projectId: Id<"projects">;
+  prefill?: string | null;
+  onPrefillConsumed?: () => void;
 }) {
   const saveMessage = useMutation(api.ceoChatMutations.saveMessage);
   const updateTitle = useMutation(api.ceoChatMutations.updateThreadTitle);
@@ -705,6 +710,16 @@ function ChatArea({
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const titleSetRef = useRef<Set<string>>(new Set());
+
+  const prefillAppliedRef = useRef(false);
+  useEffect(() => {
+    if (prefillAppliedRef.current) return;
+    if (!prefill) return;
+    if (!threadId) return;
+    prefillAppliedRef.current = true;
+    setInput(prefill);
+    onPrefillConsumed?.();
+  }, [prefill, threadId, onPrefillConsumed]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -919,10 +934,24 @@ export default function CeoChatPage() {
     [rawMessages]
   );
 
-  const handleNewChat = async () => {
+  const handleNewChat = useCallback(async () => {
     const id = await createThread({ projectId, title: "New conversation" });
     setActiveThreadId(id);
-  };
+  }, [createThread, projectId]);
+
+  const [pendingPrefill, setPendingPrefill] = useState<string | null>(null);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const autoNewTriggeredRef = useRef(false);
+  useEffect(() => {
+    if (autoNewTriggeredRef.current) return;
+    if (searchParams.get("new") !== "1") return;
+    autoNewTriggeredRef.current = true;
+    const prefill = searchParams.get("prefill");
+    if (prefill) setPendingPrefill(prefill);
+    void handleNewChat();
+    router.replace(`/projects/${projectId}/ceo-chat`);
+  }, [searchParams, handleNewChat, router, projectId]);
 
   const handleDelete = async (threadId: Id<"ceoChatThreads">) => {
     await deleteThread({ threadId });
@@ -1043,6 +1072,8 @@ export default function CeoChatPage() {
               threadId={activeThreadId}
               savedMessages={savedMessages}
               projectId={projectId}
+              prefill={pendingPrefill}
+              onPrefillConsumed={() => setPendingPrefill(null)}
             />
           )}
         </div>
