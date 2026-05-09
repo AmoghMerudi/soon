@@ -13,7 +13,7 @@ export const MANAGER_OF: Record<string, string | null> = {
   marketing: "cmo",
 };
 
-const WIRED_AGENTS = new Set(["developer"]);
+const WIRED_AGENTS = new Set(["cto", "cmo", "developer", "designer", "marketing"]);
 
 function appBaseUrl(): string | null {
   return (
