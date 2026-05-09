@@ -8,6 +8,8 @@
  * @module
  */
 
+import type * as ceoChatMutations from "../ceoChatMutations.js";
+import type * as ceoChatQueries from "../ceoChatQueries.js";
 import type * as crons from "../crons.js";
 import type * as dispatch from "../dispatch.js";
 import type * as escalation from "../escalation.js";
@@ -24,6 +26,8 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  ceoChatMutations: typeof ceoChatMutations;
+  ceoChatQueries: typeof ceoChatQueries;
   crons: typeof crons;
   dispatch: typeof dispatch;
   escalation: typeof escalation;

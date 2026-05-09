@@ -1,6 +1,15 @@
 import { query } from "./_generated/server";
 import { v } from "convex/values";
 
+export const getTicket = query({
+  args: {
+    ticketId: v.id("tickets"),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db.get(args.ticketId);
+  },
+});
+
 export const getTicketsByStatus = query({
   args: {
     status: v.union(
@@ -105,5 +114,18 @@ export const getAgentLogs = query({
       .query("agentLogs")
       .order("desc")
       .take(50);
+  },
+});
+
+export const getAgentLogsByTicket = query({
+  args: {
+    ticketId: v.id("tickets"),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("agentLogs")
+      .withIndex("by_ticket", (q) => q.eq("ticketId", args.ticketId))
+      .order("asc")
+      .collect();
   },
 });

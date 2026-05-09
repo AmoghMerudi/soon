@@ -1,0 +1,103 @@
+- generic [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e3]:
+      - generic [ref=e4]: 0to1.
+      - generic [ref=e5]:
+        - generic [ref=e6]: /dashboard
+        - generic [ref=e7]: Live
+      - button "❚❚ Pause agents" [ref=e9] [cursor=pointer]:
+        - generic [ref=e10]: ❚❚ Pause agents
+      - button "✉ Chat CEO" [active] [ref=e11] [cursor=pointer]
+      - button "+ New company" [ref=e12] [cursor=pointer]
+    - generic [ref=e13]:
+      - generic [ref=e14]:
+        - generic [ref=e15]:
+          - generic [ref=e16]: Workspace
+          - generic [ref=e17]: Children's books co.
+          - generic [ref=e18]: day 1
+        - generic [ref=e19]:
+          - link "◆ Tickets" [ref=e20] [cursor=pointer]:
+            - /url: /dashboard/tickets
+            - generic [ref=e22]: ◆
+            - text: Tickets
+          - link "● Agents" [ref=e23] [cursor=pointer]:
+            - /url: /dashboard/agents
+            - generic [ref=e24]: ●
+            - text: Agents
+          - link "⇄ Threads" [ref=e25] [cursor=pointer]:
+            - /url: /dashboard/threads
+            - generic [ref=e26]: ⇄
+            - text: Threads
+          - link "✉ CEO Chat" [ref=e27] [cursor=pointer]:
+            - /url: /dashboard/ceo-chat
+            - generic [ref=e28]: ✉
+            - text: CEO Chat
+          - link "$ Revenue" [ref=e29] [cursor=pointer]:
+            - /url: /dashboard/revenue
+            - generic [ref=e30]: $
+            - text: Revenue
+        - generic [ref=e31]:
+          - generic [ref=e32]: Agents
+          - generic [ref=e33]:
+            - generic [ref=e34]:
+              - generic [ref=e35]: C
+              - generic [ref=e36]:
+                - generic [ref=e37]: CEO
+                - generic [ref=e38]: working
+            - generic [ref=e40]:
+              - generic [ref=e41]: T
+              - generic [ref=e42]:
+                - generic [ref=e43]: CTO
+                - generic [ref=e44]: working
+            - generic [ref=e46]:
+              - generic [ref=e47]: M
+              - generic [ref=e48]:
+                - generic [ref=e49]: CMO
+                - generic [ref=e50]: working
+            - generic [ref=e52]:
+              - generic [ref=e53]: D
+              - generic [ref=e54]:
+                - generic [ref=e55]: Developer
+                - generic [ref=e56]: working
+            - generic [ref=e58]:
+              - generic [ref=e59]: D
+              - generic [ref=e60]:
+                - generic [ref=e61]: Designer
+                - generic [ref=e62]: working
+            - generic [ref=e64]:
+              - generic [ref=e65]: M
+              - generic [ref=e66]:
+                - generic [ref=e67]: Marketing
+                - generic [ref=e68]: idle
+      - generic [ref=e123]:
+        - generic [ref=e125]:
+          - generic [ref=e126]:
+            - generic [ref=e127]: Direct line
+            - heading "CEO Chat" [level=1] [ref=e128]
+          - button "+ New chat" [ref=e129] [cursor=pointer]
+        - generic [ref=e130]:
+          - button "hiceo 3m × hiceo" [ref=e132] [cursor=pointer]:
+            - generic [ref=e133]:
+              - generic [ref=e134]: hiceo
+              - generic [ref=e135]:
+                - generic [ref=e136]: 3m
+                - button "×" [ref=e137]
+            - generic [ref=e138]: hiceo
+          - generic [ref=e140]:
+            - generic [ref=e141]: C
+            - generic [ref=e142]: Talk to the CEO.
+            - generic [ref=e143]: Describe what you want to build. I'll research the market, draft a plan, and walk you through it. You approve before any agent moves.
+  - generic [ref=e116] [cursor=pointer]:
+    - button "Open Next.js Dev Tools" [ref=e117]:
+      - img [ref=e118]
+    - generic [ref=e144]:
+      - button "Open issues overlay" [ref=e145]:
+        - generic [ref=e146]:
+          - generic [ref=e147]: "1"
+          - generic [ref=e148]: "2"
+        - generic [ref=e149]:
+          - text: Issue
+          - generic [ref=e150]: s
+      - button "Collapse issues badge" [ref=e151]:
+        - img [ref=e152]
+  - alert [ref=e121]
