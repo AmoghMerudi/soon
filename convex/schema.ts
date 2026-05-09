@@ -27,6 +27,16 @@ export default defineSchema({
     blockedAt: v.optional(v.number()),
     blockedReason: v.optional(v.string()),
     escalatedTo: v.optional(v.string()),
+    workflowRunId: v.optional(v.string()),
+    dispatchStatus: v.optional(
+      v.union(
+        v.literal("pending"),
+        v.literal("running"),
+        v.literal("completed"),
+        v.literal("failed")
+      )
+    ),
+    dispatchErrorDetail: v.optional(v.string()),
   })
     .index("by_status", ["status"])
     .index("by_assignee", ["assignee"])
@@ -58,6 +68,28 @@ export default defineSchema({
     details: v.string(),
     ticketId: v.optional(v.id("tickets")),
   }).index("by_ticket", ["ticketId"]),
+
+  agentSteps: defineTable({
+    ticketId: v.id("tickets"),
+    workflowRunId: v.string(),
+    agentId: v.string(),
+    stepIndex: v.number(),
+    toolName: v.string(),
+    inputSummary: v.string(),
+    outputSummary: v.optional(v.string()),
+    status: v.union(
+      v.literal("running"),
+      v.literal("completed"),
+      v.literal("failed")
+    ),
+    startedAt: v.number(),
+    completedAt: v.optional(v.number()),
+    durationMs: v.optional(v.number()),
+    error: v.optional(v.string()),
+  })
+    .index("by_ticket", ["ticketId"])
+    .index("by_run", ["workflowRunId"])
+    .index("by_agent_recent", ["agentId", "startedAt"]),
 
   agentMemory: defineTable({
     agentId: v.string(),

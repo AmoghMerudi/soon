@@ -1,13 +1,22 @@
 import { DurableAgent } from "@workflow/ai/agent";
 import { openai } from "@workflow/ai/openai";
-import { getWritable } from "workflow";
+import { getWritable, getWorkflowMetadata } from "workflow";
+import { stepCountIs } from "ai";
 import type { UIMessageChunk } from "ai";
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "@/convex/_generated/api";
 import { developerTools } from "./tools";
 import { e2bTools, disposeSandbox } from "./e2b-tools";
 import { buildSkillsPrompt } from "./skills";
-import { createComposioSession } from "../composio-client";
+import { getComposioDurableTools } from "../composio-durable-tools";
+import {
+  markDispatchCompleted,
+  markDispatchFailed,
+} from "../shared/dispatch-steps";
+import {
+  attachObservabilityContext,
+  createObservedTools,
+} from "../shared/observability";
 
 const DEVELOPER_COMPOSIO_TOOLKITS = ["github", "vercel"];
 
@@ -55,19 +64,6 @@ const DEVELOPER_INSTRUCTIONS = `You are the Developer Agent — a senior full-st
 - Stay within 30 steps per ticket. If you need more, mark blocked and ask the CTO for guidance.
 - Do exactly one ticket per invocation. Do not create new tickets.`;
 
-async function getComposioTools() {
-  try {
-    const session = await createComposioSession({
-      userId: "developer",
-      toolkits: DEVELOPER_COMPOSIO_TOOLKITS,
-    });
-    const tools = await session.tools();
-    return { tools, error: null };
-  } catch (e) {
-    return { tools: null, error: String(e) };
-  }
-}
-
 async function logAction(
   ticketId: string,
   action: string,
@@ -87,31 +83,40 @@ async function logAction(
 export async function developerTicketWorkflow(ticketId: string) {
   "use workflow";
 
-  await logAction(ticketId, "agent_started", `Picked up ticket ${ticketId}`);
-
-  const composioResult = await getComposioTools();
-
-  if (composioResult.error) {
-    await logAction(
-      ticketId,
-      "composio_unavailable",
-      `Composio tools not loaded: ${composioResult.error}`
-    );
-  }
-
-  const allTools = composioResult.tools
-    ? { ...developerTools, ...e2bTools, ...composioResult.tools }
-    : { ...developerTools, ...e2bTools };
-
-  const agent = new DurableAgent({
-    model: openai("gpt-5.4"),
-    instructions: DEVELOPER_INSTRUCTIONS + buildSkillsPrompt(),
-    tools: allTools,
-  });
-
-  const writable = getWritable<UIMessageChunk>();
-
   try {
+    const { workflowRunId } = getWorkflowMetadata();
+    await logAction(ticketId, "agent_started", `Picked up ticket ${ticketId}`);
+
+    const composioResult = await getComposioDurableTools({
+      userId: "developer",
+      toolkits: DEVELOPER_COMPOSIO_TOOLKITS,
+    });
+
+    if (composioResult.error) {
+      await logAction(
+        ticketId,
+        "composio_unavailable",
+        `Composio tools not loaded: ${composioResult.error}`
+      );
+    }
+
+    const allTools = composioResult.tools
+      ? { ...developerTools, ...e2bTools, ...composioResult.tools }
+      : { ...developerTools, ...e2bTools };
+    const observedTools = createObservedTools(allTools, {
+      ticketId,
+      workflowRunId,
+      agentId: "developer",
+    });
+
+    const agent = new DurableAgent({
+      model: openai("gpt-5.4"),
+      instructions: DEVELOPER_INSTRUCTIONS + buildSkillsPrompt(),
+      tools: observedTools,
+    });
+
+    const writable = getWritable<UIMessageChunk>();
+
     const result = await agent.stream({
       messages: [
         {
@@ -120,7 +125,10 @@ export async function developerTicketWorkflow(ticketId: string) {
         },
       ],
       writable,
-      maxSteps: 30,
+      stopWhen: stepCountIs(30),
+      prepareStep: ({ stepNumber }) => ({
+        experimental_context: attachObservabilityContext(stepNumber),
+      }),
     });
 
     await logAction(
@@ -128,7 +136,12 @@ export async function developerTicketWorkflow(ticketId: string) {
       "agent_finished",
       `Steps: ${result.steps.length}`
     );
+    await markDispatchCompleted(ticketId);
   } catch (err) {
+    await markDispatchFailed(
+      ticketId,
+      err instanceof Error ? err.message : String(err)
+    );
     await logAction(
       ticketId,
       "agent_error",

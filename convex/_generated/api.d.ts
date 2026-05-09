@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as agentSteps from "../agentSteps.js";
 import type * as ceoChatMutations from "../ceoChatMutations.js";
 import type * as ceoChatQueries from "../ceoChatQueries.js";
 import type * as crons from "../crons.js";
@@ -26,6 +27,7 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  agentSteps: typeof agentSteps;
   ceoChatMutations: typeof ceoChatMutations;
   ceoChatQueries: typeof ceoChatQueries;
   crons: typeof crons;

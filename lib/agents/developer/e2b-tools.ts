@@ -1,9 +1,15 @@
-import { Sandbox } from "@e2b/code-interpreter";
 import { z } from "zod";
 
 let _sandboxId: string | null = null;
 
-async function getOrCreateSandbox(): Promise<Sandbox> {
+async function getSandboxClass() {
+  const { Sandbox } = await import("@e2b/code-interpreter");
+  return Sandbox;
+}
+
+async function getOrCreateSandbox() {
+  const Sandbox = await getSandboxClass();
+
   if (_sandboxId) {
     try {
       return await Sandbox.connect(_sandboxId);
@@ -86,6 +92,7 @@ export async function disposeSandbox() {
 
   if (!_sandboxId) return;
   try {
+    const Sandbox = await getSandboxClass();
     const sandbox = await Sandbox.connect(_sandboxId);
     await sandbox.kill();
   } catch {

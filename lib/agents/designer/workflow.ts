@@ -1,10 +1,19 @@
 import { DurableAgent } from "@workflow/ai/agent";
 import { openai } from "@workflow/ai/openai";
-import { getWritable } from "workflow";
+import { getWritable, getWorkflowMetadata } from "workflow";
+import { stepCountIs } from "ai";
 import type { UIMessageChunk } from "ai";
 import { designerTools } from "./tools";
-import { createComposioSession } from "../composio-client";
 import { buildSkillsPrompt } from "./skills";
+import { getComposioDurableTools } from "../composio-durable-tools";
+import {
+  markDispatchCompleted,
+  markDispatchFailed,
+} from "../shared/dispatch-steps";
+import {
+  attachObservabilityContext,
+  createObservedTools,
+} from "../shared/observability";
 
 const DESIGNER_INSTRUCTIONS = `You are Designer, a product designer embedded in an AI company operating system.
 
@@ -33,43 +42,52 @@ When a skill name is mentioned in a message, follow its process exactly.
 
 export const DESIGNER_COMPOSIO_TOOLKITS = ["figma", "cloudinary"];
 
-async function getComposioTools() {
-  try {
-    const session = await createComposioSession({
-      userId: "default",
-      toolkits: DESIGNER_COMPOSIO_TOOLKITS,
-    });
-    const tools = await session.tools();
-    return { tools, error: null };
-  } catch (e) {
-    return { tools: null, error: String(e) };
-  }
-}
-
 export async function designerWorkflow(ticketId: string) {
   "use workflow";
 
-  const composioResult = await getComposioTools();
-  const allTools = composioResult.tools
-    ? { ...designerTools, ...composioResult.tools }
-    : designerTools;
+  try {
+    const { workflowRunId } = getWorkflowMetadata();
+    const composioResult = await getComposioDurableTools({
+      userId: "default",
+      toolkits: DESIGNER_COMPOSIO_TOOLKITS,
+    });
+    const allTools = composioResult.tools
+      ? { ...designerTools, ...composioResult.tools }
+      : designerTools;
+    const observedTools = createObservedTools(allTools, {
+      ticketId,
+      workflowRunId,
+      agentId: "designer",
+    });
 
-  const agent = new DurableAgent({
-    model: openai("gpt-5.4"),
-    instructions: DESIGNER_INSTRUCTIONS,
-    tools: allTools,
-  });
+    const agent = new DurableAgent({
+      model: openai("gpt-5.4"),
+      instructions: DESIGNER_INSTRUCTIONS,
+      tools: observedTools,
+    });
 
-  const writable = getWritable<UIMessageChunk>();
+    const writable = getWritable<UIMessageChunk>();
 
-  await agent.stream({
-    messages: [
-      {
-        role: "user",
-        content: `You have been assigned ticket ${ticketId}. Start by calling getTicketDetails, then load the design-workflow skill and follow its process.`,
-      },
-    ],
-    writable,
-    maxSteps: 20,
-  });
+    await agent.stream({
+      messages: [
+        {
+          role: "user",
+          content: `You have been assigned ticket ${ticketId}. Start by calling getTicketDetails, then load the design-workflow skill and follow its process.`,
+        },
+      ],
+      writable,
+      stopWhen: stepCountIs(20),
+      prepareStep: ({ stepNumber }) => ({
+        experimental_context: attachObservabilityContext(stepNumber),
+      }),
+    });
+
+    await markDispatchCompleted(ticketId);
+  } catch (error) {
+    await markDispatchFailed(
+      ticketId,
+      error instanceof Error ? error.message : String(error)
+    );
+    throw error;
+  }
 }

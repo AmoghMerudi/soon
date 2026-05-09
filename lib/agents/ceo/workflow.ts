@@ -1,10 +1,11 @@
 import { DurableAgent } from "@workflow/ai/agent";
 import { openai } from "@workflow/ai/openai";
 import { getWritable } from "workflow";
+import { stepCountIs } from "ai";
 import type { ModelMessage, UIMessageChunk } from "ai";
 import { ceoTools } from "./tools";
 import { buildSkillsPrompt } from "./skills";
-import { createComposioSession } from "../composio-client";
+import { getComposioDurableTools } from "../composio-durable-tools";
 
 const CEO_INSTRUCTIONS = `You are the CEO Agent of 0to1, an AI-powered company operating system.
 
@@ -58,23 +59,13 @@ You delegate to CTO and CMO — never directly to execution agents (Developer, D
 
 const CEO_COMPOSIO_TOOLKITS = ["slack", "googlesheets", "googledocs", "linear"];
 
-async function getComposioTools() {
-  try {
-    const session = await createComposioSession({
-      userId: "default",
-      toolkits: CEO_COMPOSIO_TOOLKITS,
-    });
-    const tools = await session.tools();
-    return { tools, error: null };
-  } catch (e) {
-    return { tools: null, error: String(e) };
-  }
-}
-
 export async function ceoChatWorkflow(messages: ModelMessage[]) {
   "use workflow";
 
-  const composioResult = await getComposioTools();
+  const composioResult = await getComposioDurableTools({
+    userId: "default",
+    toolkits: CEO_COMPOSIO_TOOLKITS,
+  });
   const allTools = composioResult.tools
     ? { ...ceoTools, ...composioResult.tools }
     : ceoTools;
@@ -90,6 +81,6 @@ export async function ceoChatWorkflow(messages: ModelMessage[]) {
   await agent.stream({
     messages,
     writable,
-    maxSteps: 20,
+    stopWhen: stepCountIs(20),
   });
 }

@@ -1,10 +1,19 @@
 import { DurableAgent } from "@workflow/ai/agent";
 import { openai } from "@workflow/ai/openai";
-import { getWritable } from "workflow";
+import { getWritable, getWorkflowMetadata } from "workflow";
+import { stepCountIs } from "ai";
 import type { UIMessageChunk } from "ai";
 import { ctoTools } from "./tools";
 import { buildSkillsPrompt } from "./skills";
-import { createComposioSession } from "../composio-client";
+import { getComposioDurableTools } from "../composio-durable-tools";
+import {
+  markDispatchCompleted,
+  markDispatchFailed,
+} from "../shared/dispatch-steps";
+import {
+  attachObservabilityContext,
+  createObservedTools,
+} from "../shared/observability";
 
 const CTO_INSTRUCTIONS = `You are the CTO Agent of 0to1, an AI-powered company operating system.
 
@@ -45,43 +54,52 @@ You delegate to Developer only — never directly manage Design or Marketing wor
 
 const CTO_COMPOSIO_TOOLKITS = ["github", "sentry", "slack", "linear"];
 
-async function getComposioTools() {
-  try {
-    const session = await createComposioSession({
-      userId: "default",
-      toolkits: CTO_COMPOSIO_TOOLKITS,
-    });
-    const tools = await session.tools();
-    return { tools, error: null };
-  } catch (e) {
-    return { tools: null, error: String(e) };
-  }
-}
-
 export async function ctoWorkflow(ticketId: string) {
   "use workflow";
 
-  const composioResult = await getComposioTools();
-  const allTools = composioResult.tools
-    ? { ...ctoTools, ...composioResult.tools }
-    : ctoTools;
+  try {
+    const { workflowRunId } = getWorkflowMetadata();
+    const composioResult = await getComposioDurableTools({
+      userId: "default",
+      toolkits: CTO_COMPOSIO_TOOLKITS,
+    });
+    const allTools = composioResult.tools
+      ? { ...ctoTools, ...composioResult.tools }
+      : ctoTools;
+    const observedTools = createObservedTools(allTools, {
+      ticketId,
+      workflowRunId,
+      agentId: "cto",
+    });
 
-  const agent = new DurableAgent({
-    model: openai("gpt-4o"),
-    instructions: CTO_INSTRUCTIONS + buildSkillsPrompt(),
-    tools: allTools,
-  });
+    const agent = new DurableAgent({
+      model: openai("gpt-4o"),
+      instructions: CTO_INSTRUCTIONS + buildSkillsPrompt(),
+      tools: observedTools,
+    });
 
-  const writable = getWritable<UIMessageChunk>();
+    const writable = getWritable<UIMessageChunk>();
 
-  await agent.stream({
-    messages: [
-      {
-        role: "user",
-        content: `You have been assigned ticket ${ticketId}. Call getTicketDetails to read the full context, then begin your work.`,
-      },
-    ],
-    writable,
-    maxSteps: 15,
-  });
+    await agent.stream({
+      messages: [
+        {
+          role: "user",
+          content: `You have been assigned ticket ${ticketId}. Call getTicketDetails to read the full context, then begin your work.`,
+        },
+      ],
+      writable,
+      stopWhen: stepCountIs(15),
+      prepareStep: ({ stepNumber }) => ({
+        experimental_context: attachObservabilityContext(stepNumber),
+      }),
+    });
+
+    await markDispatchCompleted(ticketId);
+  } catch (error) {
+    await markDispatchFailed(
+      ticketId,
+      error instanceof Error ? error.message : String(error)
+    );
+    throw error;
+  }
 }

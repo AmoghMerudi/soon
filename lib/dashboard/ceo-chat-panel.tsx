@@ -3,6 +3,7 @@
 import { useRef, useEffect, useState } from "react";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
+import { MarkdownMessage } from "./markdown-message";
 import { Avatar, Btn } from "./primitives";
 
 const transport = new DefaultChatTransport({
@@ -28,11 +29,9 @@ function ChatBubble({
             color: "#FAFAF7",
             borderRadius: "16px 16px 6px 16px",
             padding: "10px 14px",
-            fontSize: 14,
-            lineHeight: 1.55,
           }}
         >
-          {text}
+          <MarkdownMessage text={text} variant="user" />
         </div>
       </div>
     );
@@ -44,46 +43,184 @@ function ChatBubble({
         className="flex-1 min-w-0"
         style={{
           paddingTop: 2,
-          fontSize: 14,
           color: pending ? "#5E5C56" : "#E6E3DA",
-          lineHeight: 1.6,
           fontStyle: pending ? "italic" : "normal",
-          whiteSpace: "pre-wrap",
         }}
       >
-        {text}
+        {pending ? text : <MarkdownMessage text={text} variant="assistant" />}
       </div>
     </div>
   );
 }
 
-function ToolCallIndicator({ toolName }: { toolName: string }) {
+function ToolCallIndicator({
+  toolName,
+  input,
+  output,
+  state,
+}: {
+  toolName: string;
+  input?: Record<string, unknown>;
+  output?: unknown;
+  state?: string;
+}) {
   const labels: Record<string, string> = {
     createTicket: "Creating ticket",
     updateTicketStatus: "Updating ticket",
     addComment: "Adding comment",
     listTickets: "Checking tickets",
   };
+
+  const formatToolValue = (value: unknown) => {
+    if (typeof value === "string") return value;
+    if (
+      typeof value === "number" ||
+      typeof value === "boolean" ||
+      typeof value === "bigint"
+    ) {
+      return String(value);
+    }
+    if (value == null) return "";
+    try {
+      return JSON.stringify(
+        value,
+        (_key, nestedValue) =>
+          typeof nestedValue === "bigint"
+            ? nestedValue.toString()
+            : nestedValue,
+        2
+      );
+    } catch {
+      return String(value);
+    }
+  };
+
+  const renderedInput = input ? formatToolValue(input) : "";
+  const renderedOutput =
+    state === "output-error"
+      ? "Tool execution failed."
+      : state === "output-denied"
+        ? "Tool execution was denied."
+        : output !== undefined
+          ? formatToolValue(output)
+          : "Running...";
+
   return (
-    <div className="flex gap-2.5 items-center">
+    <div className="flex gap-2.5 items-start">
       <Avatar role="ceo" size={26} />
-      <div
-        className="font-mono uppercase inline-flex items-center gap-1.5"
-        style={{
-          fontSize: 11,
-          letterSpacing: "0.1em",
-          color: "#F2C744",
-          padding: "4px 8px",
-          background: "#1A1815",
-          borderRadius: 8,
-          border: "1px solid #26241F",
-        }}
-      >
-        <span
-          className="pulse rounded-full"
-          style={{ width: 5, height: 5, background: "#F2C744" }}
-        />
-        {labels[toolName] ?? toolName}
+      <div className="flex-1 min-w-0">
+        <div
+          className="font-mono uppercase inline-flex items-center gap-1.5"
+          style={{
+            fontSize: 11,
+            letterSpacing: "0.1em",
+            color: "#F2C744",
+            padding: "4px 8px",
+            background: "#1A1815",
+            borderRadius: 8,
+            border: "1px solid #26241F",
+          }}
+        >
+          <span
+            className="pulse rounded-full"
+            style={{ width: 5, height: 5, background: "#F2C744" }}
+          />
+          {labels[toolName] ?? toolName}
+        </div>
+        <details className="mt-2 group">
+          <summary
+            className="font-mono cursor-pointer list-none inline-flex items-center gap-2 select-none"
+            style={{
+              fontSize: 11,
+              letterSpacing: "0.08em",
+              color: "#8E8B82",
+            }}
+          >
+            <span
+              style={{
+                fontSize: 10,
+                transform: "rotate(0deg)",
+                transition: "transform 160ms ease",
+              }}
+              className="group-open:rotate-90"
+            >
+              ▶
+            </span>
+            <span style={{ textTransform: "uppercase" }}>View I/O</span>
+          </summary>
+          <div className="mt-2 grid gap-2">
+            {renderedInput && (
+              <div
+                style={{
+                  background: "#12110F",
+                  border: "1px solid #26241F",
+                  borderRadius: 10,
+                  overflow: "hidden",
+                }}
+              >
+                <div
+                  className="font-mono uppercase"
+                  style={{
+                    fontSize: 10,
+                    letterSpacing: "0.12em",
+                    color: "#8E8B82",
+                    padding: "8px 10px",
+                    borderBottom: "1px solid #26241F",
+                  }}
+                >
+                  Input
+                </div>
+                <pre
+                  className="font-mono whitespace-pre-wrap break-words"
+                  style={{
+                    margin: 0,
+                    padding: "10px 12px",
+                    fontSize: 12,
+                    lineHeight: 1.6,
+                    color: "#DCD9CF",
+                    overflowX: "auto",
+                  }}
+                >
+                  {renderedInput}
+                </pre>
+              </div>
+            )}
+            <div
+              style={{
+                background: "#12110F",
+                border: "1px solid #26241F",
+                borderRadius: 10,
+                overflow: "hidden",
+              }}
+            >
+              <div
+                className="font-mono uppercase"
+                style={{
+                  fontSize: 10,
+                  letterSpacing: "0.12em",
+                  color: "#8E8B82",
+                  padding: "8px 10px",
+                  borderBottom: "1px solid #26241F",
+                }}
+              >
+                Output
+              </div>
+              <pre
+                className="font-mono whitespace-pre-wrap break-words"
+                style={{
+                  margin: 0,
+                  padding: "10px 12px",
+                  fontSize: 12,
+                  lineHeight: 1.6,
+                  color: "#DCD9CF",
+                  overflowX: "auto",
+                }}
+              >
+                {renderedOutput}
+              </pre>
+            </div>
+          </div>
+        </details>
       </div>
     </div>
   );
@@ -210,7 +347,7 @@ export function CEOChatPanel({
                 lineHeight: 1.6,
               }}
             >
-              Describe what you want to build. I'll research the market, draft a
+              Describe what you want to build. I&apos;ll research the market, draft a
               plan, and walk you through it. You approve before any agent moves.
             </div>
           </div>
@@ -229,10 +366,22 @@ export function CEOChatPanel({
             }
             if (part.type.startsWith("tool-")) {
               const toolName = part.type.replace("tool-", "");
+              const toolInput =
+                "input" in part
+                  ? (part.input as Record<string, unknown>)
+                  : undefined;
+              const toolOutput =
+                "state" in part && part.state === "output-available"
+                  ? part.output
+                  : undefined;
+              const toolState = "state" in part ? part.state : undefined;
               return (
                 <ToolCallIndicator
                   key={`${message.id}-${idx}`}
                   toolName={toolName}
+                  input={toolInput}
+                  output={toolOutput}
+                  state={toolState}
                 />
               );
             }
