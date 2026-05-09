@@ -1,7 +1,8 @@
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
 import { getWritable } from "workflow";
-import type { UIMessageChunk } from "ai";
+import type { UIMessageChunk, ToolSet } from "ai";
 import { z } from "zod";
 import { getSkillContent } from "./skills";
 import { questionHook } from "./hooks";
@@ -12,6 +13,7 @@ const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 // --- Step functions (each uses "use step" for durability and automatic retries) ---
 
 async function createTicketStep(input: {
+  projectId: string;
   title: string;
   description: string;
   priority: "critical" | "high" | "medium" | "low";
@@ -22,6 +24,7 @@ async function createTicketStep(input: {
   "use step";
 
   const ticketId = await convex.mutation(api.mutations.createTicket, {
+    projectId: input.projectId as Id<"projects">,
     title: input.title,
     description: input.description,
     status: "backlog",
@@ -37,19 +40,21 @@ async function createTicketStep(input: {
     action: "create_ticket",
     details: `Created ticket: ${input.title}`,
     ticketId,
+    projectId: input.projectId as Id<"projects">,
   });
 
   return { ticketId: ticketId.toString(), title: input.title };
 }
 
 async function assignTicketStep(input: {
+  projectId: string;
   ticketId: string;
   assignee: string | null;
 }) {
   "use step";
 
   await convex.mutation(api.mutations.assignTicket, {
-    ticketId: input.ticketId as any,
+    ticketId: input.ticketId as Id<"tickets">,
     assignee: input.assignee,
   });
 
@@ -57,20 +62,22 @@ async function assignTicketStep(input: {
     agent: "CEO",
     action: "assign_ticket",
     details: `Assigned ticket ${input.ticketId} to ${input.assignee ?? "unassigned"}`,
-    ticketId: input.ticketId as any,
+    ticketId: input.ticketId as Id<"tickets">,
+    projectId: input.projectId as Id<"projects">,
   });
 
   return { success: true };
 }
 
 async function updateTicketStatusStep(input: {
+  projectId: string;
   ticketId: string;
   status: "backlog" | "in_progress" | "in_review" | "resolved" | "blocked";
 }) {
   "use step";
 
   await convex.mutation(api.mutations.updateTicketStatus, {
-    ticketId: input.ticketId as any,
+    ticketId: input.ticketId as Id<"tickets">,
     status: input.status,
   });
 
@@ -78,7 +85,8 @@ async function updateTicketStatusStep(input: {
     agent: "CEO",
     action: "update_ticket_status",
     details: `Updated ticket ${input.ticketId} to ${input.status}`,
-    ticketId: input.ticketId as any,
+    ticketId: input.ticketId as Id<"tickets">,
+    projectId: input.projectId as Id<"projects">,
   });
 
   return { success: true };
@@ -91,7 +99,7 @@ async function addCommentStep(input: {
   "use step";
 
   const commentId = await convex.mutation(api.mutations.addComment, {
-    ticketId: input.ticketId as any,
+    ticketId: input.ticketId as Id<"tickets">,
     content: input.content,
     author: "CEO",
   });
@@ -100,11 +108,13 @@ async function addCommentStep(input: {
 }
 
 async function getTicketsByStatusStep(input: {
+  projectId: string;
   status: "backlog" | "in_progress" | "in_review" | "resolved" | "blocked";
 }) {
   "use step";
 
   const tickets = await convex.query(api.queries.getTicketsByStatus, {
+    projectId: input.projectId as Id<"projects">,
     status: input.status,
   });
 
@@ -118,10 +128,14 @@ async function getTicketsByStatusStep(input: {
   }));
 }
 
-async function getTicketsByAssigneeStep(input: { assignee: string }) {
+async function getTicketsByAssigneeStep(input: {
+  projectId: string;
+  assignee: string;
+}) {
   "use step";
 
   const tickets = await convex.query(api.queries.getTicketsByAssignee, {
+    projectId: input.projectId as Id<"projects">,
     assignee: input.assignee,
   });
 
@@ -140,13 +154,13 @@ async function reviewArtifactStep(input: { ticketId: string }) {
 
   const [ticket, comments, artifacts] = await Promise.all([
     convex.query(api.queries.getTicket, {
-      ticketId: input.ticketId as any,
+      ticketId: input.ticketId as Id<"tickets">,
     }),
     convex.query(api.queries.getTicketComments, {
-      ticketId: input.ticketId as any,
+      ticketId: input.ticketId as Id<"tickets">,
     }),
     convex.query(api.queries.getTicketArtifacts, {
-      ticketId: input.ticketId as any,
+      ticketId: input.ticketId as Id<"tickets">,
     }),
   ]);
 
@@ -154,6 +168,7 @@ async function reviewArtifactStep(input: { ticketId: string }) {
 }
 
 async function createSubTicketStep(input: {
+  projectId: string;
   parentTicketId: string;
   title: string;
   description: string;
@@ -165,6 +180,7 @@ async function createSubTicketStep(input: {
   "use step";
 
   const ticketId = await convex.mutation(api.mutations.createTicket, {
+    projectId: input.projectId as Id<"projects">,
     title: input.title,
     description: input.description,
     status: "backlog",
@@ -173,7 +189,7 @@ async function createSubTicketStep(input: {
     assignee: input.assignee,
     createdBy: "CEO",
     taggedAgents: input.taggedAgents,
-    parentTicket: input.parentTicketId as any,
+    parentTicket: input.parentTicketId as Id<"tickets">,
   });
 
   await convex.mutation(api.mutations.logAgentAction, {
@@ -181,12 +197,11 @@ async function createSubTicketStep(input: {
     action: "create_sub_ticket",
     details: `Created sub-ticket: ${input.title} (parent: ${input.parentTicketId})`,
     ticketId,
+    projectId: input.projectId as Id<"projects">,
   });
 
   return { ticketId: ticketId.toString(), title: input.title };
 }
-
-// --- Skill & question step functions ---
 
 async function loadSkillStep(input: { name: string }) {
   "use step";
@@ -224,157 +239,173 @@ async function askQuestionExecute(
   return answer;
 }
 
-// --- Tool definitions for DurableAgent ---
+// --- Tool factory: builds DurableAgent tool set bound to a project ---
 
-export const ceoTools = {
-  createTicket: {
-    description:
-      "Create a new ticket. Assign engineering tickets to CTO, design/marketing tickets to CMO. Status is always backlog.",
-    inputSchema: z.object({
-      title: z.string().describe("Short, descriptive ticket title"),
-      description: z
-        .string()
-        .describe("Detailed description with acceptance criteria"),
-      priority: z.enum(["critical", "high", "medium", "low"]),
-      tags: z
-        .array(z.string())
-        .describe(
-          'Domain tags: "engineering", "design", "marketing", "strategy", "infrastructure", "security"'
-        ),
-      assignee: z
-        .nullable(z.string())
-        .describe(
-          "CTO for engineering work, CMO for design/marketing. null for strategy."
-        ),
-      taggedAgents: z
-        .array(z.string())
-        .describe("Agents to notify — always include CEO"),
-    }),
-    execute: createTicketStep,
-  },
+export function buildCeoTools(projectId: Id<"projects">): ToolSet {
+  const pid = projectId as unknown as string;
+  return {
+    createTicket: {
+      description:
+        "Create a new ticket. Assign engineering tickets to CTO, design/marketing tickets to CMO. Status is always backlog.",
+      inputSchema: z.object({
+        title: z.string().describe("Short, descriptive ticket title"),
+        description: z
+          .string()
+          .describe("Detailed description with acceptance criteria"),
+        priority: z.enum(["critical", "high", "medium", "low"]),
+        tags: z
+          .array(z.string())
+          .describe(
+            'Domain tags: "engineering", "design", "marketing", "strategy", "infrastructure", "security"'
+          ),
+        assignee: z
+          .nullable(z.string())
+          .describe(
+            "CTO for engineering work, CMO for design/marketing. null for strategy."
+          ),
+        taggedAgents: z
+          .array(z.string())
+          .describe("Agents to notify — always include CEO"),
+      }),
+      execute: (input: Omit<Parameters<typeof createTicketStep>[0], "projectId">) =>
+        createTicketStep({ ...input, projectId: pid }),
+    },
 
-  assignTicket: {
-    description:
-      "Assign or reassign a ticket to an agent. CEO delegates to CTO or CMO only. Use the EXACT ticketId from createTicket.",
-    inputSchema: z.object({
-      ticketId: z.string().describe("Exact ticket ID from createTicket"),
-      assignee: z
-        .nullable(z.string())
-        .describe("CTO, CMO, or null to unassign"),
-    }),
-    execute: assignTicketStep,
-  },
+    assignTicket: {
+      description:
+        "Assign or reassign a ticket to an agent. CEO delegates to CTO or CMO only. Use the EXACT ticketId from createTicket.",
+      inputSchema: z.object({
+        ticketId: z.string().describe("Exact ticket ID from createTicket"),
+        assignee: z
+          .nullable(z.string())
+          .describe("CTO, CMO, or null to unassign"),
+      }),
+      execute: (input: Omit<Parameters<typeof assignTicketStep>[0], "projectId">) =>
+        assignTicketStep({ ...input, projectId: pid }),
+    },
 
-  updateTicketStatus: {
-    description:
-      "Move a ticket through workflow states: backlog → in_progress → in_review → resolved. Use blocked when work is stuck.",
-    inputSchema: z.object({
-      ticketId: z.string().describe("Exact ticket ID from createTicket"),
-      status: z.enum([
-        "backlog",
-        "in_progress",
-        "in_review",
-        "resolved",
-        "blocked",
-      ]),
-    }),
-    execute: updateTicketStatusStep,
-  },
+    updateTicketStatus: {
+      description:
+        "Move a ticket through workflow states: backlog → in_progress → in_review → resolved. Use blocked when work is stuck.",
+      inputSchema: z.object({
+        ticketId: z.string().describe("Exact ticket ID from createTicket"),
+        status: z.enum([
+          "backlog",
+          "in_progress",
+          "in_review",
+          "resolved",
+          "blocked",
+        ]),
+      }),
+      execute: (
+        input: Omit<Parameters<typeof updateTicketStatusStep>[0], "projectId">
+      ) => updateTicketStatusStep({ ...input, projectId: pid }),
+    },
 
-  addComment: {
-    description:
-      "Add strategic context, feedback, or review notes to a ticket. Use the EXACT ticketId string returned by createTicket — it is a long alphanumeric ID.",
-    inputSchema: z.object({
-      ticketId: z
-        .string()
-        .describe(
-          "The EXACT ticket ID returned by createTicket (long alphanumeric string, e.g. 'jx7akyp84a3ws1xfmx4cgxh9mn86db7r'). Do NOT shorten or modify it."
-        ),
-      content: z
-        .string()
-        .describe("Strategic guidance, feedback, or review notes"),
-    }),
-    execute: addCommentStep,
-  },
+    addComment: {
+      description:
+        "Add strategic context, feedback, or review notes to a ticket. Use the EXACT ticketId string returned by createTicket — it is a long alphanumeric ID.",
+      inputSchema: z.object({
+        ticketId: z
+          .string()
+          .describe(
+            "The EXACT ticket ID returned by createTicket (long alphanumeric string, e.g. 'jx7akyp84a3ws1xfmx4cgxh9mn86db7r'). Do NOT shorten or modify it."
+          ),
+        content: z
+          .string()
+          .describe("Strategic guidance, feedback, or review notes"),
+      }),
+      execute: addCommentStep,
+    },
 
-  getTicketsByStatus: {
-    description:
-      "Query tickets by status for pipeline visibility. Use to understand workload and progress.",
-    inputSchema: z.object({
-      status: z.enum([
-        "backlog",
-        "in_progress",
-        "in_review",
-        "resolved",
-        "blocked",
-      ]),
-    }),
-    execute: getTicketsByStatusStep,
-  },
+    getTicketsByStatus: {
+      description:
+        "Query tickets by status for pipeline visibility. Use to understand workload and progress.",
+      inputSchema: z.object({
+        status: z.enum([
+          "backlog",
+          "in_progress",
+          "in_review",
+          "resolved",
+          "blocked",
+        ]),
+      }),
+      execute: (
+        input: Omit<Parameters<typeof getTicketsByStatusStep>[0], "projectId">
+      ) => getTicketsByStatusStep({ ...input, projectId: pid }),
+    },
 
-  getTicketsByAssignee: {
-    description:
-      "See what a specific agent is working on. Check workload before assigning new work.",
-    inputSchema: z.object({
-      assignee: z
-        .string()
-        .describe("Agent name: CTO, CMO, Developer, Designer, Marketing"),
-    }),
-    execute: getTicketsByAssigneeStep,
-  },
+    getTicketsByAssignee: {
+      description:
+        "See what a specific agent is working on. Check workload before assigning new work.",
+      inputSchema: z.object({
+        assignee: z
+          .string()
+          .describe("Agent name: CTO, CMO, Developer, Designer, Marketing"),
+      }),
+      execute: (
+        input: Omit<Parameters<typeof getTicketsByAssigneeStep>[0], "projectId">
+      ) => getTicketsByAssigneeStep({ ...input, projectId: pid }),
+    },
 
-  reviewArtifact: {
-    description:
-      "Review completed work on a ticket — fetches ticket details, all comments, and attached artifacts (PRs, designs, deployments). Use to approve or request changes.",
-    inputSchema: z.object({
-      ticketId: z.string().describe("Exact ticket ID from createTicket"),
-    }),
-    execute: reviewArtifactStep,
-  },
+    reviewArtifact: {
+      description:
+        "Review completed work on a ticket — fetches ticket details, all comments, and attached artifacts (PRs, designs, deployments). Use to approve or request changes.",
+      inputSchema: z.object({
+        ticketId: z.string().describe("Exact ticket ID from createTicket"),
+      }),
+      execute: reviewArtifactStep,
+    },
 
-  createSubTicket: {
-    description:
-      "Break a ticket into sub-tasks. Max depth: 3 levels. Use for large work items that need decomposition.",
-    inputSchema: z.object({
-      parentTicketId: z.string(),
-      title: z.string(),
-      description: z
-        .string()
-        .describe("Detailed description with acceptance criteria"),
-      priority: z.enum(["critical", "high", "medium", "low"]),
-      tags: z.array(z.string()),
-      assignee: z
-        .nullable(z.string())
-        .describe("CTO, CMO, or null for strategy"),
-      taggedAgents: z
-        .array(z.string())
-        .describe("Agents to notify — always include CEO"),
-    }),
-    execute: createSubTicketStep,
-  },
+    createSubTicket: {
+      description:
+        "Break a ticket into sub-tasks. Max depth: 3 levels. Use for large work items that need decomposition.",
+      inputSchema: z.object({
+        parentTicketId: z.string(),
+        title: z.string(),
+        description: z
+          .string()
+          .describe("Detailed description with acceptance criteria"),
+        priority: z.enum(["critical", "high", "medium", "low"]),
+        tags: z.array(z.string()),
+        assignee: z
+          .nullable(z.string())
+          .describe("CTO, CMO, or null for strategy"),
+        taggedAgents: z
+          .array(z.string())
+          .describe("Agents to notify — always include CEO"),
+      }),
+      execute: (
+        input: Omit<Parameters<typeof createSubTicketStep>[0], "projectId">
+      ) => createSubTicketStep({ ...input, projectId: pid }),
+    },
 
-  loadSkill: {
-    description:
-      "Load a skill's full instructions by name. Use when a task matches an available skill.",
-    inputSchema: z.object({
-      name: z.string().describe("Skill name from the available skills list"),
-    }),
-    execute: loadSkillStep,
-  },
+    loadSkill: {
+      description:
+        "Load a skill's full instructions by name. Use when a task matches an available skill.",
+      inputSchema: z.object({
+        name: z.string().describe("Skill name from the available skills list"),
+      }),
+      execute: loadSkillStep,
+    },
 
-  askQuestion: {
-    description:
-      "Present a structured question to the user with selectable options. The workflow pauses until the user answers. Use for discovery, clarification, or decisions that need user input.",
-    inputSchema: z.object({
-      question: z.string().describe("The question to ask the user"),
-      options: z
-        .array(z.string())
-        .describe(
-          "2-6 concrete answer choices. Always include a 'Something else' option last."
-        ),
-    }),
-    execute: askQuestionExecute,
-  },
+    askQuestion: {
+      description:
+        "Present a structured question to the user with selectable options. The workflow pauses until the user answers. Use for discovery, clarification, or decisions that need user input.",
+      inputSchema: z.object({
+        question: z.string().describe("The question to ask the user"),
+        options: z
+          .array(z.string())
+          .describe(
+            "2-6 concrete answer choices. Always include a 'Something else' option last."
+          ),
+      }),
+      execute: askQuestionExecute,
+    },
 
-  exaSearch: exaSearchDurableTool,
-};
+    exaSearch: exaSearchDurableTool,
+  } as ToolSet;
+}
+
+/** @deprecated use buildCeoTools(projectId). Kept temporarily for legacy imports. */
+export const ceoTools = undefined as unknown as ToolSet;

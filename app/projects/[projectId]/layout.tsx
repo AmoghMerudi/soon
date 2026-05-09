@@ -1,16 +1,24 @@
 "use client";
 
-import { useState } from "react";
+import { use, useState } from "react";
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
 import { ROLES, SEED_AGENTS } from "@/lib/dashboard/constants";
 import { Avatar, Btn } from "@/lib/dashboard/primitives";
+import { ProjectIdProvider } from "@/lib/dashboard/project-context";
 
-const NAV_ITEMS = [
-  { id: "tickets",  href: "/dashboard/tickets",   label: "Tickets",  glyph: "◆" },
-  { id: "agents",   href: "/dashboard/agents",    label: "Agents",   glyph: "●" },
-  { id: "ceo-chat", href: "/dashboard/ceo-chat",  label: "CEO Chat", glyph: "✉" },
-  { id: "revenue",  href: "/dashboard/revenue",   label: "Revenue",  glyph: "$" },
-];
+function navItems(projectId: string) {
+  const base = `/projects/${projectId}`;
+  return [
+    { id: "tickets",  href: `${base}/tickets`,   label: "Tickets",  glyph: "◆" },
+    { id: "agents",   href: `${base}/agents`,    label: "Agents",   glyph: "●" },
+    { id: "ceo-chat", href: `${base}/ceo-chat`,  label: "CEO Chat", glyph: "✉" },
+    { id: "revenue",  href: `${base}/revenue`,   label: "Revenue",  glyph: "$" },
+  ];
+}
 
 function TopBar({
   paused,
@@ -44,7 +52,7 @@ function TopBar({
           className="font-mono"
           style={{ fontSize: 14, color: "#8E8B82", letterSpacing: "0.04em" }}
         >
-          /dashboard
+          /projects
         </span>
         {live && (
           <span
@@ -74,8 +82,17 @@ function TopBar({
   );
 }
 
-function Sidebar({ pathname }: { pathname: string }) {
+function Sidebar({
+  pathname,
+  projectId,
+  projectName,
+}: {
+  pathname: string;
+  projectId: string;
+  projectName: string;
+}) {
   const agents = SEED_AGENTS;
+  const NAV_ITEMS = navItems(projectId);
   const activeId = NAV_ITEMS.find(
     (i) => pathname === i.href || pathname.startsWith(i.href + "/")
   )?.id;
@@ -109,14 +126,20 @@ function Sidebar({ pathname }: { pathname: string }) {
           className="font-sans font-semibold"
           style={{ fontSize: 15, color: "#FAFAF7" }}
         >
-          Children&apos;s books co.
+          {projectName}
         </div>
-        <div
+        <Link
+          href="/projects"
           className="font-mono"
-          style={{ fontSize: 12, color: "#8E8B82", marginTop: 2 }}
+          style={{
+            fontSize: 12,
+            color: "#8E8B82",
+            marginTop: 2,
+            textDecoration: "none",
+          }}
         >
-          day 1
-        </div>
+          ← all projects
+        </Link>
       </div>
 
       {/* Nav */}
@@ -231,33 +254,49 @@ function Sidebar({ pathname }: { pathname: string }) {
 
 export default function DashboardLayout({
   children,
+  params,
 }: {
   children: React.ReactNode;
+  params: Promise<{ projectId: string }>;
 }) {
+  const { projectId } = use(params);
   const pathname = usePathname();
   const router = useRouter();
   const [paused, setPaused] = useState(false);
 
+  const project = useQuery(api.projects.getProject, {
+    projectId: projectId as Id<"projects">,
+  });
+  const projectName = project?.name ?? "Project";
+
+  const ceoChatHref = `/projects/${projectId}/ceo-chat`;
+
   return (
-    <div
-      className="flex flex-col"
-      style={{ height: "100vh", background: "#0A0A0A" }}
-    >
-      <TopBar
-        paused={paused}
-        onPause={() => setPaused((p) => !p)}
-        onChatCEO={() => router.push("/dashboard/ceo-chat")}
-        onNewCompany={() => router.push("/dashboard/ceo-chat")}
-      />
-      <div className="flex flex-1 overflow-hidden relative">
-        <Sidebar pathname={pathname} />
-        <div
-          className="flex-1 overflow-y-auto"
-          style={{ background: "#0A0A0A" }}
-        >
-          {children}
+    <ProjectIdProvider projectId={projectId as Id<"projects">}>
+      <div
+        className="flex flex-col"
+        style={{ height: "100vh", background: "#0A0A0A" }}
+      >
+        <TopBar
+          paused={paused}
+          onPause={() => setPaused((p) => !p)}
+          onChatCEO={() => router.push(ceoChatHref)}
+          onNewCompany={() => router.push(ceoChatHref)}
+        />
+        <div className="flex flex-1 overflow-hidden relative">
+          <Sidebar
+            pathname={pathname}
+            projectId={projectId}
+            projectName={projectName}
+          />
+          <div
+            className="flex-1 overflow-y-auto"
+            style={{ background: "#0A0A0A" }}
+          >
+            {children}
+          </div>
         </div>
       </div>
-    </div>
+    </ProjectIdProvider>
   );
 }

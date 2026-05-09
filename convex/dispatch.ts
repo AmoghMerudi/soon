@@ -59,9 +59,10 @@ export const dispatchAgent = internalAction({
   args: {
     ticketId: v.id("tickets"),
     agentRole: v.string(),
+    projectId: v.optional(v.id("projects")),
     attempt: v.optional(v.number()),
   },
-  handler: async (ctx, { ticketId, agentRole, attempt = 0 }) => {
+  handler: async (ctx, { ticketId, agentRole, projectId, attempt = 0 }) => {
     const normalizedRole = agentRole.toLowerCase();
 
     async function failDispatch(details: string) {
@@ -73,6 +74,7 @@ export const dispatchAgent = internalAction({
           {
             ticketId,
             agentRole: normalizedRole,
+            projectId,
             attempt: nextAttempt,
           }
         );
@@ -81,6 +83,7 @@ export const dispatchAgent = internalAction({
           action: "dispatch_retry",
           details: `Dispatch attempt ${nextAttempt} failed: ${details.slice(0, 200)}`,
           ticketId,
+          ...(projectId ? { projectId } : {}),
         });
         return;
       }
@@ -95,6 +98,7 @@ export const dispatchAgent = internalAction({
         action: "dispatch_error",
         details: details.slice(0, 500),
         ticketId,
+        ...(projectId ? { projectId } : {}),
       });
     }
 
@@ -109,6 +113,7 @@ export const dispatchAgent = internalAction({
         action: "dispatch_error",
         details: `No dispatch route wired for ${normalizedRole}`,
         ticketId,
+        ...(projectId ? { projectId } : {}),
       });
       return;
     }
@@ -131,7 +136,7 @@ export const dispatchAgent = internalAction({
       const response = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ticketId }),
+        body: JSON.stringify({ ticketId, projectId }),
       });
 
       if (!response.ok) {
@@ -143,20 +148,18 @@ export const dispatchAgent = internalAction({
       }
 
       const data = (await response.json().catch(() => ({}))) as { runId?: string };
-      if (!data.runId) {
-        await failDispatch("Agent route returned no runId");
-        return;
+      if (data.runId) {
+        await ctx.runMutation(internal.mutations._storeWorkflowRunInternal, {
+          ticketId,
+          runId: data.runId,
+        });
       }
-
-      await ctx.runMutation(internal.mutations._storeWorkflowRunInternal, {
-        ticketId,
-        runId: data.runId,
-      });
       await ctx.runMutation(internal.mutations._logAgentActionInternal, {
         agent: normalizedRole,
         action: "dispatched",
-        details: `Started workflow runId=${data.runId} for ticket ${ticketId}`,
+        details: `Started workflow${data.runId ? ` runId=${data.runId}` : ""} for ticket ${ticketId}`,
         ticketId,
+        ...(projectId ? { projectId } : {}),
       });
     } catch (error) {
       await failDispatch(error instanceof Error ? error.message : String(error));

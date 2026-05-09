@@ -1,10 +1,16 @@
 import { query } from "./_generated/server";
 import { v } from "convex/values";
 
+const statusValidator = v.union(
+  v.literal("backlog"),
+  v.literal("in_progress"),
+  v.literal("in_review"),
+  v.literal("resolved"),
+  v.literal("blocked")
+);
+
 export const getTicket = query({
-  args: {
-    ticketId: v.id("tickets"),
-  },
+  args: { ticketId: v.id("tickets") },
   handler: async (ctx, args) => {
     return await ctx.db.get(args.ticketId);
   },
@@ -12,18 +18,15 @@ export const getTicket = query({
 
 export const getTicketsByStatus = query({
   args: {
-    status: v.union(
-      v.literal("backlog"),
-      v.literal("in_progress"),
-      v.literal("in_review"),
-      v.literal("resolved"),
-      v.literal("blocked")
-    ),
+    projectId: v.id("projects"),
+    status: statusValidator,
   },
   handler: async (ctx, args) => {
     return await ctx.db
       .query("tickets")
-      .withIndex("by_status", (q) => q.eq("status", args.status))
+      .withIndex("by_project_status", (q) =>
+        q.eq("projectId", args.projectId).eq("status", args.status)
+      )
       .order("asc")
       .collect();
   },
@@ -31,29 +34,36 @@ export const getTicketsByStatus = query({
 
 export const getTicketsByAssignee = query({
   args: {
+    projectId: v.id("projects"),
     assignee: v.string(),
   },
   handler: async (ctx, args) => {
     return await ctx.db
       .query("tickets")
-      .withIndex("by_assignee", (q) => q.eq("assignee", args.assignee))
+      .withIndex("by_project_assignee", (q) =>
+        q.eq("projectId", args.projectId).eq("assignee", args.assignee)
+      )
       .order("asc")
       .collect();
   },
 });
 
 export const getTicketsByTag = query({
-  args: { tag: v.string() },
+  args: {
+    projectId: v.id("projects"),
+    tag: v.string(),
+  },
   handler: async (ctx, args) => {
-    const all = await ctx.db.query("tickets").collect();
+    const all = await ctx.db
+      .query("tickets")
+      .withIndex("by_project_status", (q) => q.eq("projectId", args.projectId))
+      .collect();
     return all.filter((t) => t.tags.includes(args.tag));
   },
 });
 
 export const getTicketComments = query({
-  args: {
-    ticketId: v.id("tickets"),
-  },
+  args: { ticketId: v.id("tickets") },
   handler: async (ctx, args) => {
     return await ctx.db
       .query("comments")
@@ -64,9 +74,7 @@ export const getTicketComments = query({
 });
 
 export const getTicketArtifacts = query({
-  args: {
-    ticketId: v.id("tickets"),
-  },
+  args: { ticketId: v.id("tickets") },
   handler: async (ctx, args) => {
     return await ctx.db
       .query("artifacts")
@@ -108,19 +116,23 @@ export const getTicketDetails = query({
 });
 
 export const getAgentLogs = query({
-  args: {},
-  handler: async (ctx) => {
-    return await ctx.db
-      .query("agentLogs")
-      .order("desc")
-      .take(50);
+  args: { projectId: v.optional(v.id("projects")) },
+  handler: async (ctx, args) => {
+    if (args.projectId) {
+      return await ctx.db
+        .query("agentLogs")
+        .withIndex("by_project_ticket", (q) =>
+          q.eq("projectId", args.projectId)
+        )
+        .order("desc")
+        .take(50);
+    }
+    return await ctx.db.query("agentLogs").order("desc").take(50);
   },
 });
 
 export const getAgentLogsByTicket = query({
-  args: {
-    ticketId: v.id("tickets"),
-  },
+  args: { ticketId: v.id("tickets") },
   handler: async (ctx, args) => {
     return await ctx.db
       .query("agentLogs")

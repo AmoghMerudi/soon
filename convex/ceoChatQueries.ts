@@ -2,11 +2,11 @@ import { query } from "./_generated/server";
 import { v } from "convex/values";
 
 export const listThreads = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { projectId: v.id("projects") },
+  handler: async (ctx, { projectId }) => {
     return await ctx.db
       .query("ceoChatThreads")
-      .withIndex("by_updated")
+      .withIndex("by_project_updated", (q) => q.eq("projectId", projectId))
       .order("desc")
       .collect();
   },

@@ -90,6 +90,7 @@ async function syncAssigneeState(
 
 export const createTicket = mutation({
   args: {
+    projectId: v.id("projects"),
     title: v.string(),
     description: v.string(),
     status: statusValidator,
@@ -106,6 +107,9 @@ export const createTicket = mutation({
     if (args.parentTicket) {
       const parent = await ctx.db.get(args.parentTicket);
       if (!parent) throw new ConvexError("parent ticket not found");
+      if (parent.projectId && parent.projectId !== args.projectId) {
+        throw new ConvexError("sub-ticket project must match parent");
+      }
       depth = (parent.depth ?? 0) + 1;
       if (depth > MAX_DEPTH) {
         throw new ConvexError(`sub-ticket depth ${depth} exceeds max ${MAX_DEPTH}`);
@@ -113,6 +117,7 @@ export const createTicket = mutation({
     }
 
     const ticketId = await ctx.db.insert("tickets", {
+      projectId: args.projectId,
       title: args.title,
       description: args.description,
       status: args.status,
@@ -153,6 +158,7 @@ export const createSubTicket = mutation({
     }
 
     const ticketId = await ctx.db.insert("tickets", {
+      projectId: parent.projectId,
       title: args.title,
       description: args.description,
       status: "backlog",
@@ -335,6 +341,8 @@ export const retryDispatch = mutation({
         action: "dispatch_pending",
         details: "CEO assignment — trigger via chat at /dashboard/ceo-chat",
         ticketId: args.ticketId,
+        agentRole: args.assignee,
+        projectId: ticket.projectId,
       });
       return { status: "pending", via: "ceo_chat" as const };
     }
@@ -402,7 +410,10 @@ export const addComment = mutation({
     content: v.string(),
   },
   handler: async (ctx, args) => {
+    const ticket = await ctx.db.get(args.ticketId);
+    if (!ticket) throw new ConvexError("ticket not found");
     return await ctx.db.insert("comments", {
+      projectId: ticket.projectId,
       ticketId: args.ticketId,
       author: args.author,
       content: args.content,
@@ -425,7 +436,10 @@ export const addArtifact = mutation({
     description: v.string(),
   },
   handler: async (ctx, args) => {
+    const ticket = await ctx.db.get(args.ticketId);
+    if (!ticket) throw new ConvexError("ticket not found");
     return await ctx.db.insert("artifacts", {
+      projectId: ticket.projectId,
       ticketId: args.ticketId,
       type: args.type,
       url: args.url,
@@ -447,6 +461,7 @@ export const reviewArtifact = mutation({
 
     if (args.comment) {
       await ctx.db.insert("comments", {
+        projectId: artifact.projectId,
         ticketId: artifact.ticketId,
         author: args.reviewer,
         content: `[${args.decision}] ${args.comment}`,
@@ -467,9 +482,16 @@ export const logAgentAction = mutation({
     action: v.string(),
     details: v.string(),
     ticketId: v.optional(v.id("tickets")),
+    projectId: v.optional(v.id("projects")),
   },
   handler: async (ctx, args) => {
+    let projectId = args.projectId;
+    if (!projectId && args.ticketId) {
+      const ticket = await ctx.db.get(args.ticketId);
+      projectId = ticket?.projectId;
+    }
     return await ctx.db.insert("agentLogs", {
+      projectId,
       agent: args.agent,
       action: args.action,
       details: args.details,
@@ -484,9 +506,16 @@ export const _logAgentActionInternal = internalMutation({
     action: v.string(),
     details: v.string(),
     ticketId: v.optional(v.id("tickets")),
+    projectId: v.optional(v.id("projects")),
   },
   handler: async (ctx, args) => {
+    let projectId = args.projectId;
+    if (!projectId && args.ticketId) {
+      const ticket = await ctx.db.get(args.ticketId);
+      projectId = ticket?.projectId;
+    }
     return await ctx.db.insert("agentLogs", {
+      projectId,
       agent: args.agent,
       action: args.action,
       details: args.details,
