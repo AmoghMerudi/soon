@@ -17,6 +17,7 @@
     "@ai-sdk/openai": "^3.0.63",
     "@ai-sdk/react": "^3.0.179",
     "@composio/core": "^0.9.0",
+    "@composio/json-schema-to-zod": "^0.1.20",
     "@composio/vercel": "^0.9.0",
     "@e2b/code-interpreter": "^2.4.2",
     "@workflow/ai": "^4.1.2",
