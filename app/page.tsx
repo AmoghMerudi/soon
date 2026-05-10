@@ -87,9 +87,9 @@ export default function Home() {
             </div>
             <a
               className="rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm font-semibold text-white backdrop-blur transition hover:bg-white/16"
-              href="#onboarding"
+              href="/collabhub"
             >
-              Join waitlist
+              Open app
             </a>
           </nav>
 
@@ -109,7 +109,7 @@ export default function Home() {
               <div className="mt-9 flex flex-col gap-3 sm:flex-row">
                 <a
                   className="rounded-full bg-white px-6 py-3 text-center text-sm font-bold text-[#111] transition hover:scale-[1.02]"
-                  href="#onboarding"
+                  href="/collabhub"
                 >
                   Start building your profile
                 </a>
@@ -340,8 +340,8 @@ export default function Home() {
             subscriptions, and real messaging APIs.
           </p>
           <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
-            <a className="rounded-full bg-white px-6 py-3 text-sm font-bold text-[#111]" href="mailto:founders@collabhub.app">
-              Request early access
+            <a className="rounded-full bg-white px-6 py-3 text-sm font-bold text-[#111]" href="/collabhub">
+              Open CollabHub app
             </a>
             <a className="rounded-full border border-white/15 px-6 py-3 text-sm font-bold text-white" href="#top">
               Back to top
