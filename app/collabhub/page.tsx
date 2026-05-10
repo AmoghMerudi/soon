@@ -2,6 +2,7 @@
 
 import { FormEvent, useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
+import Link from "next/link";
 import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 
@@ -187,9 +188,9 @@ export default function CollabHubAppPage() {
       <div className="mx-auto max-w-7xl">
         <header className="flex flex-col gap-5 border-b border-white/10 pb-8 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <a href="/" className="text-sm font-semibold uppercase tracking-[0.24em] text-white/45">
+            <Link href="/" className="text-sm font-semibold uppercase tracking-[0.24em] text-white/45">
               CollabHub
-            </a>
+            </Link>
             <h1 className="mt-3 text-4xl font-semibold tracking-[-0.05em] sm:text-6xl">
               Collaboration workspace
             </h1>
