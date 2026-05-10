@@ -49,9 +49,14 @@ function pairKey(a: Id<"collabUsers">, b: Id<"collabUsers">) {
   return [a, b].sort().join(":");
 }
 
-function publicUser(user: Doc<"collabUsers"> | null) {
+type PublicCollabUser = Omit<Doc<"collabUsers">, "passwordHash" | "googleSub" | "appleSub">;
+
+function publicUser(user: Doc<"collabUsers"> | null): PublicCollabUser | null {
   if (!user) return null;
-  const { passwordHash: _passwordHash, googleSub: _googleSub, appleSub: _appleSub, ...safeUser } = user;
+  const safeUser = { ...user };
+  delete safeUser.passwordHash;
+  delete safeUser.googleSub;
+  delete safeUser.appleSub;
   return safeUser;
 }
 
@@ -337,7 +342,7 @@ export const listInfluencers = query({
       .filter((user) => !args.niche || user.niche === args.niche)
       .filter((user) => !args.minFollowers || (user.followerCount ?? 0) >= args.minFollowers)
       .sort((a, b) => (b.followerCount ?? 0) - (a.followerCount ?? 0))
-      .map(publicUser);
+      .map((user) => publicUser(user)!);
   },
 });
 
