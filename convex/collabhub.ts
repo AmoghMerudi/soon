@@ -4,6 +4,13 @@ import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/s
 
 const roleValidator = v.union(v.literal("brand"), v.literal("influencer"));
 const tierValidator = v.union(v.literal("free"), v.literal("basic"), v.literal("pro"));
+const subscriptionStatusValidator = v.union(
+  v.literal("inactive"),
+  v.literal("active"),
+  v.literal("trialing"),
+  v.literal("past_due"),
+  v.literal("cancelled")
+);
 const campaignStatusValidator = v.union(
   v.literal("open"),
   v.literal("reviewing"),
@@ -128,6 +135,7 @@ export const upsertUser = mutation({
       email,
       ...patch,
       subscriptionTier: "free",
+      subscriptionStatus: "inactive",
       createdAt: now,
     });
   },
@@ -144,7 +152,6 @@ export const updateProfile = mutation({
     location: v.optional(v.string()),
     followerCount: v.optional(v.number()),
     engagementRate: v.optional(v.number()),
-    subscriptionTier: tierValidator,
   },
   handler: async (ctx, args) => {
     await getUserOrThrow(ctx, args.userId);
@@ -157,7 +164,27 @@ export const updateProfile = mutation({
       location: args.location?.trim() || undefined,
       followerCount: args.followerCount,
       engagementRate: args.engagementRate,
+      updatedAt: Date.now(),
+    });
+    return { ok: true };
+  },
+});
+
+export const updateBillingStatus = mutation({
+  args: {
+    userId: v.id("collabUsers"),
+    subscriptionTier: tierValidator,
+    subscriptionStatus: subscriptionStatusValidator,
+    stripeCustomerId: v.optional(v.string()),
+    stripeSubscriptionId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    await getUserOrThrow(ctx, args.userId);
+    await ctx.db.patch(args.userId, {
       subscriptionTier: args.subscriptionTier,
+      subscriptionStatus: args.subscriptionStatus,
+      stripeCustomerId: args.stripeCustomerId,
+      stripeSubscriptionId: args.stripeSubscriptionId,
       updatedAt: Date.now(),
     });
     return { ok: true };

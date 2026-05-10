@@ -196,6 +196,17 @@ export default defineSchema({
     followerCount: v.optional(v.number()),
     engagementRate: v.optional(v.number()),
     subscriptionTier: v.union(v.literal("free"), v.literal("basic"), v.literal("pro")),
+    subscriptionStatus: v.optional(
+      v.union(
+        v.literal("inactive"),
+        v.literal("active"),
+        v.literal("trialing"),
+        v.literal("past_due"),
+        v.literal("cancelled")
+      )
+    ),
+    stripeCustomerId: v.optional(v.string()),
+    stripeSubscriptionId: v.optional(v.string()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })

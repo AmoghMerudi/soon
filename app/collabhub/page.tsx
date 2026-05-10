@@ -3,6 +3,7 @@
 import { FormEvent, useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 
@@ -12,6 +13,7 @@ type Tab = "marketplace" | "dashboard" | "messages" | "profile";
 const categories = ["Beauty", "Lifestyle", "Food", "Fitness", "Fashion", "Travel", "Gaming"];
 
 export default function CollabHubAppPage() {
+  const searchParams = useSearchParams();
   const [sessionUserId, setSessionUserId] = useState<Id<"collabUsers"> | null>(null);
   const [loginEmail, setLoginEmail] = useState("");
   const [activeTab, setActiveTab] = useState<Tab>("marketplace");
@@ -65,6 +67,7 @@ export default function CollabHubAppPage() {
 
   const applications = currentUser?.role === "brand" ? brandApplications : influencerApplications;
   const selectedConversation = conversations?.find((item) => item._id === selectedConversationId);
+  const billingStatus = searchParams.get("billing");
 
   const dashboardStats = useMemo(() => {
     if (currentUser?.role === "brand") {
@@ -155,9 +158,47 @@ export default function CollabHubAppPage() {
       location: String(form.get("location") ?? "") || undefined,
       followerCount: Number(form.get("followerCount") ?? 0) || undefined,
       engagementRate: Number(form.get("engagementRate") ?? 0) || undefined,
-      subscriptionTier: String(form.get("subscriptionTier") ?? "free") as "free" | "basic" | "pro",
     });
     setNotice("Profile updated.");
+  }
+
+  async function handleStartCheckout(tier: "basic" | "pro") {
+    if (!currentUser) return;
+    const response = await fetch("/api/collabhub/billing/checkout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        userId: currentUser._id,
+        email: currentUser.email,
+        name: currentUser.name,
+        tier,
+        stripeCustomerId: currentUser.stripeCustomerId,
+      }),
+    });
+    const result = (await response.json()) as { url?: string; error?: string };
+    if (!response.ok || !result.url) {
+      setNotice(result.error ?? "Unable to start checkout. Check Stripe environment variables.");
+      return;
+    }
+    window.location.assign(result.url);
+  }
+
+  async function handleOpenBillingPortal() {
+    if (!currentUser?.stripeCustomerId) {
+      setNotice("No Stripe customer exists yet. Upgrade first to create a billing account.");
+      return;
+    }
+    const response = await fetch("/api/collabhub/billing/portal", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ stripeCustomerId: currentUser.stripeCustomerId }),
+    });
+    const result = (await response.json()) as { url?: string; error?: string };
+    if (!response.ok || !result.url) {
+      setNotice(result.error ?? "Unable to open billing portal.");
+      return;
+    }
+    window.location.assign(result.url);
   }
 
   async function handleOpenConversation(otherUserId: Id<"collabUsers">, campaignId?: Id<"collabCampaigns">) {
@@ -220,6 +261,15 @@ export default function CollabHubAppPage() {
         {notice && (
           <div className="mt-6 rounded-2xl border border-[#80FFB0]/25 bg-[#80FFB0]/10 px-4 py-3 text-sm text-[#BFFFF0]">
             {notice}
+          </div>
+        )}
+        {billingStatus && (
+          <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm text-white/70">
+            {billingStatus === "success"
+              ? "Checkout completed. Stripe will update your tier after the webhook runs."
+              : billingStatus === "cancelled"
+                ? "Checkout was cancelled. You can upgrade any time."
+                : "Returned from the billing portal."}
           </div>
         )}
 
@@ -290,7 +340,12 @@ export default function CollabHubAppPage() {
               />
             )}
             {activeTab === "profile" && (
-              <ProfilePanel currentUser={currentUser} onProfileUpdate={handleProfileUpdate} />
+              <ProfilePanel
+                currentUser={currentUser}
+                onOpenBillingPortal={handleOpenBillingPortal}
+                onProfileUpdate={handleProfileUpdate}
+                onStartCheckout={handleStartCheckout}
+              />
             )}
           </>
         )}
@@ -751,49 +806,122 @@ function MessagesPanel({
 
 function ProfilePanel({
   currentUser,
+  onOpenBillingPortal,
   onProfileUpdate,
+  onStartCheckout,
 }: {
   currentUser: Doc<"collabUsers">;
+  onOpenBillingPortal: () => Promise<void>;
   onProfileUpdate: (event: FormEvent<HTMLFormElement>) => Promise<void>;
+  onStartCheckout: (tier: "basic" | "pro") => Promise<void>;
 }) {
   return (
-    <section className="mt-8 max-w-3xl rounded-[2rem] border border-white/10 bg-white/[0.05] p-6">
-      <SectionHeader eyebrow="Profile" title="Keep your marketplace profile current." />
-      <form className="mt-6 grid gap-3" onSubmit={onProfileUpdate}>
-        <Field defaultValue={currentUser.name} label="Name" name="name" required />
-        <Field defaultValue={currentUser.companyName} label="Company or creator brand" name="companyName" />
-        <label className="text-sm text-white/58">
-          Bio
-          <textarea
-            className="mt-2 min-h-28 w-full rounded-2xl border border-white/10 bg-[#111116] px-4 py-3 text-white outline-none"
-            defaultValue={currentUser.bio}
-            name="bio"
-          />
-        </label>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field defaultValue={currentUser.niche} label="Niche" name="niche" />
-          <Field defaultValue={currentUser.location} label="Location" name="location" />
-          <Field defaultValue={currentUser.websiteUrl} label="Website" name="websiteUrl" />
-          <Field defaultValue={currentUser.followerCount} label="Follower count" name="followerCount" type="number" />
-          <Field defaultValue={currentUser.engagementRate} label="Engagement rate" name="engagementRate" type="number" />
+    <section className="mt-8 grid gap-6 lg:grid-cols-[0.62fr_0.38fr]">
+      <div className="rounded-[2rem] border border-white/10 bg-white/[0.05] p-6">
+        <SectionHeader eyebrow="Profile" title="Keep your marketplace profile current." />
+        <form className="mt-6 grid gap-3" onSubmit={onProfileUpdate}>
+          <Field defaultValue={currentUser.name} label="Name" name="name" required />
+          <Field defaultValue={currentUser.companyName} label="Company or creator brand" name="companyName" />
           <label className="text-sm text-white/58">
-            Subscription tier
-            <select
-              className="mt-2 w-full rounded-2xl border border-white/10 bg-[#111116] px-4 py-3 text-white"
-              defaultValue={currentUser.subscriptionTier}
-              name="subscriptionTier"
-            >
-              <option value="free">Free</option>
-              <option value="basic">Basic - $9.99/mo</option>
-              <option value="pro">Pro - $29.99/mo</option>
-            </select>
+            Bio
+            <textarea
+              className="mt-2 min-h-28 w-full rounded-2xl border border-white/10 bg-[#111116] px-4 py-3 text-white outline-none"
+              defaultValue={currentUser.bio}
+              name="bio"
+            />
           </label>
-        </div>
-        <button className="rounded-full bg-white px-5 py-3 font-bold text-[#101014]" type="submit">
-          Save profile
-        </button>
-      </form>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field defaultValue={currentUser.niche} label="Niche" name="niche" />
+            <Field defaultValue={currentUser.location} label="Location" name="location" />
+            <Field defaultValue={currentUser.websiteUrl} label="Website" name="websiteUrl" />
+            <Field defaultValue={currentUser.followerCount} label="Follower count" name="followerCount" type="number" />
+            <Field defaultValue={currentUser.engagementRate} label="Engagement rate" name="engagementRate" type="number" />
+          </div>
+          <button className="rounded-full bg-white px-5 py-3 font-bold text-[#101014]" type="submit">
+            Save profile
+          </button>
+        </form>
+      </div>
+
+      <BillingPanel
+        currentUser={currentUser}
+        onOpenBillingPortal={onOpenBillingPortal}
+        onStartCheckout={onStartCheckout}
+      />
     </section>
+  );
+}
+
+function BillingPanel({
+  currentUser,
+  onOpenBillingPortal,
+  onStartCheckout,
+}: {
+  currentUser: Doc<"collabUsers">;
+  onOpenBillingPortal: () => Promise<void>;
+  onStartCheckout: (tier: "basic" | "pro") => Promise<void>;
+}) {
+  const plans = [
+    {
+      tier: "basic" as const,
+      name: "Basic",
+      price: "$9.99/mo",
+      description: currentUser.role === "brand" ? "Post campaigns and manage up to 10 conversations." : "Apply without limits and unlock portfolio visibility.",
+    },
+    {
+      tier: "pro" as const,
+      name: "Pro",
+      price: "$29.99/mo",
+      description: "Unlimited messaging, featured placement, contract templates, and priority support.",
+    },
+  ];
+
+  return (
+    <aside className="rounded-[2rem] border border-white/10 bg-[#111116] p-6">
+      <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#80FFB0]">Billing</p>
+      <h2 className="mt-2 text-3xl font-semibold tracking-[-0.04em]">Subscription</h2>
+      <div className="mt-5 rounded-3xl bg-white/[0.06] p-4">
+        <div className="text-sm text-white/45">Current plan</div>
+        <div className="mt-1 text-2xl font-semibold capitalize">{currentUser.subscriptionTier}</div>
+        <div className="mt-1 text-sm text-white/45">
+          Status: {currentUser.subscriptionStatus ?? "inactive"}
+        </div>
+      </div>
+
+      <div className="mt-5 grid gap-3">
+        {plans.map((plan) => (
+          <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-4" key={plan.tier}>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="font-semibold">{plan.name}</div>
+                <div className="mt-1 text-sm text-white/50">{plan.description}</div>
+              </div>
+              <div className="whitespace-nowrap text-sm font-semibold text-[#80FFB0]">{plan.price}</div>
+            </div>
+            <button
+              className="mt-4 w-full rounded-full bg-white px-4 py-2 text-sm font-bold text-[#101014] disabled:cursor-not-allowed disabled:bg-white/20 disabled:text-white/35"
+              disabled={currentUser.subscriptionTier === plan.tier}
+              onClick={() => onStartCheckout(plan.tier)}
+              type="button"
+            >
+              {currentUser.subscriptionTier === plan.tier ? "Current plan" : `Upgrade to ${plan.name}`}
+            </button>
+          </div>
+        ))}
+      </div>
+
+      <button
+        className="mt-4 w-full rounded-full border border-white/15 px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:text-white/35"
+        disabled={!currentUser.stripeCustomerId}
+        onClick={onOpenBillingPortal}
+        type="button"
+      >
+        Manage billing
+      </button>
+      <p className="mt-3 text-xs leading-5 text-white/42">
+        Requires Stripe env vars: STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, and Basic/Pro price IDs.
+      </p>
+    </aside>
   );
 }
 
