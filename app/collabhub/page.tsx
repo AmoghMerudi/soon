@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, Suspense, useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -13,6 +13,24 @@ type Tab = "marketplace" | "dashboard" | "messages" | "profile";
 const categories = ["Beauty", "Lifestyle", "Food", "Fitness", "Fashion", "Travel", "Gaming"];
 
 export default function CollabHubAppPage() {
+  return (
+    <Suspense fallback={<CollabHubLoading />}>
+      <CollabHubWorkspace />
+    </Suspense>
+  );
+}
+
+function CollabHubLoading() {
+  return (
+    <main className="min-h-screen bg-[#08080A] px-5 py-8 text-white sm:px-8">
+      <div className="mx-auto max-w-7xl rounded-[2rem] border border-white/10 bg-white/[0.05] p-8 text-white/60">
+        Loading CollabHub...
+      </div>
+    </main>
+  );
+}
+
+function CollabHubWorkspace() {
   const searchParams = useSearchParams();
   const [sessionUserId, setSessionUserId] = useState<Id<"collabUsers"> | null>(null);
   const [loginEmail, setLoginEmail] = useState("");
