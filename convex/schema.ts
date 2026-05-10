@@ -5,11 +5,12 @@ export default defineSchema({
   projects: defineTable({
     name: v.string(),
     description: v.optional(v.string()),
-    createdAt: v.number(),
     githubRepo: v.optional(v.string()),
     githubOwner: v.optional(v.string()),
     vercelProjectId: v.optional(v.string()),
     vercelTeamId: v.optional(v.string()),
+    stripeApiKey: v.optional(v.string()),
+    createdAt: v.number(),
   }).index("by_createdAt", ["createdAt"]),
 
   tickets: defineTable({

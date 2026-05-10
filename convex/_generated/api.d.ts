@@ -21,6 +21,7 @@ import type * as queries from "../queries.js";
 import type * as seedAgentConfig from "../seedAgentConfig.js";
 import type * as seedSkills from "../seedSkills.js";
 import type * as skills from "../skills.js";
+import type * as stripe from "../stripe.js";
 
 import type {
   ApiFromModules,
@@ -42,6 +43,7 @@ declare const fullApi: ApiFromModules<{
   seedAgentConfig: typeof seedAgentConfig;
   seedSkills: typeof seedSkills;
   skills: typeof skills;
+  stripe: typeof stripe;
 }>;
 
 /**

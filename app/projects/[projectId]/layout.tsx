@@ -14,14 +14,11 @@ function navItems(projectId: string) {
   const base = `/projects/${projectId}`;
   return [
     { id: "tickets", href: `${base}/tickets`, label: "Tickets", glyph: "◆" },
-    {
-      id: "repository",
-      href: `${base}/repository`,
-      label: "Repository",
-      glyph: "▤",
-    },
+    { id: "repository", href: `${base}/repository`, label: "Repository", glyph: "▤" },
     { id: "agents", href: `${base}/agents`, label: "Agents", glyph: "●" },
     { id: "ceo-chat", href: `${base}/ceo-chat`, label: "CEO Chat", glyph: "✉" },
+    { id: "revenue", href: `${base}/revenue`, label: "Revenue", glyph: "$" },
+    { id: "playground", href: `${base}/playground`, label: "Playground", glyph: "▲" },
   ];
 }
 
