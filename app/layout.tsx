@@ -14,8 +14,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "0to1 — AI Company OS",
-  description: "Autonomous AI agents that plan, build, and operate companies.",
+  title: "CollabHub - Brand and Influencer Collaboration Platform",
+  description:
+    "A subscription platform for brands and influencers to discover campaigns, message, and manage collaboration deals.",
 };
 
 export default function RootLayout({
