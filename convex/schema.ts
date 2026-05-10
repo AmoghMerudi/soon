@@ -187,6 +187,8 @@ export default defineSchema({
   collabUsers: defineTable({
     email: v.string(),
     passwordHash: v.optional(v.string()),
+    googleSub: v.optional(v.string()),
+    appleSub: v.optional(v.string()),
     name: v.string(),
     role: v.union(v.literal("brand"), v.literal("influencer")),
     companyName: v.optional(v.string()),

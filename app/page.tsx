@@ -84,6 +84,9 @@ export default function Home() {
               <a className="transition hover:text-white" href="#pricing">
                 Pricing
               </a>
+              <a className="transition hover:text-white" href="/collabhub/test">
+                Test
+              </a>
             </div>
             <a
               className="rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm font-semibold text-white backdrop-blur transition hover:bg-white/16"
@@ -342,6 +345,9 @@ export default function Home() {
           <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
             <a className="rounded-full bg-white px-6 py-3 text-sm font-bold text-[#111]" href="/collabhub">
               Open CollabHub app
+            </a>
+            <a className="rounded-full border border-white/15 px-6 py-3 text-sm font-bold text-white" href="/collabhub/test">
+              Open test center
             </a>
             <a className="rounded-full border border-white/15 px-6 py-3 text-sm font-bold text-white" href="#top">
               Back to top

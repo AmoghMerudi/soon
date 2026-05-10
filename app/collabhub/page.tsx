@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, Suspense, useEffect, useMemo, useState } from "react";
+import { FormEvent, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -9,6 +9,28 @@ import type { Doc, Id } from "@/convex/_generated/dataModel";
 
 type Role = "brand" | "influencer";
 type Tab = "marketplace" | "dashboard" | "messages" | "profile";
+
+declare global {
+  interface Window {
+    google?: {
+      accounts: {
+        id: {
+          initialize: (config: {
+            client_id: string;
+            callback: (response: { credential?: string }) => void;
+          }) => void;
+          renderButton: (element: HTMLElement, options: Record<string, string | number | boolean>) => void;
+        };
+      };
+    };
+    AppleID?: {
+      auth: {
+        init: (config: Record<string, string | boolean>) => void;
+        signIn: () => Promise<{ authorization?: { id_token?: string } }>;
+      };
+    };
+  }
+}
 
 const categories = ["Beauty", "Lifestyle", "Food", "Fitness", "Fashion", "Travel", "Gaming"];
 
@@ -156,6 +178,21 @@ function CollabHubWorkspace() {
     }
     setSessionUserId(result.userId);
     setNotice("Welcome back.");
+  }
+
+  async function handleSocialAuth(provider: "google" | "apple", token: string, role: Role) {
+    const response = await fetch(`/api/collabhub/auth/${provider}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(provider === "google" ? { credential: token, role } : { identityToken: token, role }),
+    });
+    const result = (await response.json()) as { userId?: Id<"collabUsers">; error?: string };
+    if (!response.ok || !result.userId) {
+      setNotice(result.error ?? `Unable to continue with ${provider}.`);
+      return;
+    }
+    setSessionUserId(result.userId);
+    setNotice(`Signed in with ${provider}.`);
   }
 
   async function handleSignOut() {
@@ -312,6 +349,12 @@ function CollabHubWorkspace() {
               </button>
             </div>
           )}
+          <Link
+            className="rounded-full border border-white/15 px-5 py-3 text-center text-sm font-bold text-white"
+            href="/collabhub/test"
+          >
+            Test center
+          </Link>
         </header>
 
         {notice && (
@@ -337,6 +380,7 @@ function CollabHubWorkspace() {
           <AuthPanels
             onLogin={handleLogin}
             onRegister={handleRegister}
+            onSocialAuth={handleSocialAuth}
           />
         ) : (
           <>
@@ -415,10 +459,74 @@ function CollabHubWorkspace() {
 function AuthPanels({
   onLogin,
   onRegister,
+  onSocialAuth,
 }: {
   onLogin: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   onRegister: (event: FormEvent<HTMLFormElement>) => Promise<void>;
+  onSocialAuth: (provider: "google" | "apple", token: string, role: Role) => Promise<void>;
 }) {
+  const googleButtonRef = useRef<HTMLDivElement | null>(null);
+  const [socialRole, setSocialRole] = useState<Role>("influencer");
+  const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+  const appleClientId = process.env.NEXT_PUBLIC_APPLE_CLIENT_ID;
+
+  useEffect(() => {
+    if (!googleClientId || !googleButtonRef.current) return;
+
+    const render = () => {
+      if (!window.google || !googleButtonRef.current) return;
+      googleButtonRef.current.innerHTML = "";
+      window.google.accounts.id.initialize({
+        client_id: googleClientId,
+        callback: (response) => {
+          if (response.credential) void onSocialAuth("google", response.credential, socialRole);
+        },
+      });
+      window.google.accounts.id.renderButton(googleButtonRef.current, {
+        theme: "outline",
+        size: "large",
+        width: 320,
+        text: "continue_with",
+      });
+    };
+
+    if (window.google) {
+      render();
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.src = "https://accounts.google.com/gsi/client";
+    script.async = true;
+    script.defer = true;
+    script.onload = render;
+    document.head.appendChild(script);
+  }, [googleClientId, onSocialAuth, socialRole]);
+
+  useEffect(() => {
+    if (!appleClientId) return;
+    if (window.AppleID) return;
+
+    const script = document.createElement("script");
+    script.src = "https://appleid.cdn-apple.com/appleauth/static/jsapi/appleid/1/en_US/appleid.auth.js";
+    script.async = true;
+    script.defer = true;
+    document.head.appendChild(script);
+  }, [appleClientId]);
+
+  async function handleAppleSignIn() {
+    if (!appleClientId || !window.AppleID) return;
+    window.AppleID.auth.init({
+      clientId: appleClientId,
+      scope: "name email",
+      redirectURI: window.location.origin,
+      usePopup: true,
+    });
+    const response = await window.AppleID.auth.signIn();
+    const token = response.authorization?.id_token;
+    if (token) await onSocialAuth("apple", token, socialRole);
+  }
+
   return (
     <section className="mt-10 grid gap-5 lg:grid-cols-2">
       <form className="rounded-[2rem] border border-white/10 bg-white/[0.05] p-6" onSubmit={onRegister}>
@@ -442,19 +550,61 @@ function AuthPanels({
         </div>
       </form>
 
-      <form className="rounded-[2rem] border border-white/10 bg-white/[0.05] p-6" onSubmit={onLogin}>
-        <h2 className="text-2xl font-semibold">Log in by email</h2>
-        <p className="mt-2 text-sm text-white/56">
-          Passwords are hashed server-side and the session is stored in an HTTP-only cookie.
-        </p>
-        <div className="mt-6 grid gap-3">
-          <Field label="Email" name="email" placeholder="you@example.com" required type="email" />
-          <Field label="Password" name="password" placeholder="Your password" required type="password" />
-          <button className="rounded-full border border-white/15 px-5 py-3 font-bold text-white" type="submit">
-            Log in
-          </button>
+      <div className="grid gap-5">
+        <form className="rounded-[2rem] border border-white/10 bg-white/[0.05] p-6" onSubmit={onLogin}>
+          <h2 className="text-2xl font-semibold">Log in</h2>
+          <p className="mt-2 text-sm text-white/56">
+            Passwords are hashed server-side and the session is stored in an HTTP-only cookie.
+          </p>
+          <div className="mt-6 grid gap-3">
+            <Field label="Email" name="email" placeholder="you@example.com" required type="email" />
+            <Field label="Password" name="password" placeholder="Your password" required type="password" />
+            <button className="rounded-full border border-white/15 px-5 py-3 font-bold text-white" type="submit">
+              Log in
+            </button>
+          </div>
+        </form>
+
+        <div className="rounded-[2rem] border border-white/10 bg-white/[0.05] p-6">
+          <h2 className="text-2xl font-semibold">Social sign-in</h2>
+          <p className="mt-2 text-sm text-white/56">
+            Choose the account type for new social users before continuing.
+          </p>
+          <label className="mt-5 block text-sm text-white/58">
+            New social account type
+            <select
+              className="mt-2 w-full rounded-2xl border border-white/10 bg-[#111116] px-4 py-3 text-white"
+              onChange={(event) => setSocialRole(event.target.value as Role)}
+              value={socialRole}
+            >
+              <option value="influencer">Influencer</option>
+              <option value="brand">Brand</option>
+            </select>
+          </label>
+
+          <div className="mt-5 grid gap-3">
+            {googleClientId ? (
+              <div ref={googleButtonRef} />
+            ) : (
+              <button
+                className="rounded-full border border-white/15 px-5 py-3 font-bold text-white/35"
+                disabled
+                type="button"
+              >
+                Google sign-in needs NEXT_PUBLIC_GOOGLE_CLIENT_ID
+              </button>
+            )}
+            <button
+              className="rounded-full border border-white/15 bg-black px-5 py-3 font-bold text-white disabled:cursor-not-allowed disabled:text-white/35"
+              disabled={!appleClientId}
+              onClick={handleAppleSignIn}
+              type="button"
+            >
+              {appleClientId ? "Continue with Apple" : "Apple sign-in needs NEXT_PUBLIC_APPLE_CLIENT_ID"}
+            </button>
+          </div>
         </div>
-      </form>
+      </div>
     </section>
   );
 }

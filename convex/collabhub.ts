@@ -49,6 +49,12 @@ function pairKey(a: Id<"collabUsers">, b: Id<"collabUsers">) {
   return [a, b].sort().join(":");
 }
 
+function publicUser(user: Doc<"collabUsers"> | null) {
+  if (!user) return null;
+  const { passwordHash: _passwordHash, googleSub: _googleSub, appleSub: _appleSub, ...safeUser } = user;
+  return safeUser;
+}
+
 async function getUserOrThrow(ctx: QueryCtx | MutationCtx, userId: Id<"collabUsers">) {
   const user = await ctx.db.get(userId);
   if (!user) throw new ConvexError("user not found");
@@ -95,17 +101,18 @@ export const getUserByEmail = query({
   handler: async (ctx, { email }) => {
     const normalized = normalizeEmail(email);
     if (!normalized) return null;
-    return await ctx.db
+    const user = await ctx.db
       .query("collabUsers")
       .withIndex("by_email", (q) => q.eq("email", normalized))
       .first();
+    return publicUser(user);
   },
 });
 
 export const getUser = query({
   args: { userId: v.id("collabUsers") },
   handler: async (ctx, { userId }) => {
-    return await ctx.db.get(userId);
+    return publicUser(await ctx.db.get(userId));
   },
 });
 
@@ -218,6 +225,53 @@ export const registerPasswordUser = mutation({
   },
 });
 
+export const upsertSocialUser = mutation({
+  args: {
+    email: v.string(),
+    name: v.string(),
+    role: roleValidator,
+    provider: v.union(v.literal("google"), v.literal("apple")),
+    providerSub: v.string(),
+    serverSecret: v.string(),
+  },
+  handler: async (ctx, args) => {
+    requireServerSecret(args.serverSecret);
+    const email = normalizeEmail(args.email);
+    const name = requireText(args.name, "name");
+    const providerSub = requireText(args.providerSub, "provider subject");
+    if (!email.includes("@")) throw new ConvexError("valid email is required");
+
+    const existing = await ctx.db
+      .query("collabUsers")
+      .withIndex("by_email", (q) => q.eq("email", email))
+      .first();
+    const now = Date.now();
+    const providerPatch =
+      args.provider === "google" ? { googleSub: providerSub } : { appleSub: providerSub };
+
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        ...providerPatch,
+        name: existing.name || name,
+        role: existing.role || args.role,
+        updatedAt: now,
+      });
+      return existing._id;
+    }
+
+    return await ctx.db.insert("collabUsers", {
+      email,
+      ...providerPatch,
+      name,
+      role: args.role,
+      subscriptionTier: "free",
+      subscriptionStatus: "inactive",
+      createdAt: now,
+      updatedAt: now,
+    });
+  },
+});
+
 export const updateProfile = mutation({
   args: {
     userId: v.id("collabUsers"),
@@ -282,7 +336,8 @@ export const listInfluencers = query({
     return influencers
       .filter((user) => !args.niche || user.niche === args.niche)
       .filter((user) => !args.minFollowers || (user.followerCount ?? 0) >= args.minFollowers)
-      .sort((a, b) => (b.followerCount ?? 0) - (a.followerCount ?? 0));
+      .sort((a, b) => (b.followerCount ?? 0) - (a.followerCount ?? 0))
+      .map(publicUser);
   },
 });
 
@@ -316,7 +371,7 @@ export const listCampaigns = query({
               )
               .first()
           : null;
-        return { ...campaign, brand, existingApplication };
+        return { ...campaign, brand: publicUser(brand), existingApplication };
       })
     );
 
@@ -403,8 +458,8 @@ async function enrichApplications(
     applications.map(async (application) => ({
       ...application,
       campaign: await ctx.db.get(application.campaignId),
-      brand: await ctx.db.get(application.brandId),
-      influencer: await ctx.db.get(application.influencerId),
+      brand: publicUser(await ctx.db.get(application.brandId)),
+      influencer: publicUser(await ctx.db.get(application.influencerId)),
     }))
   );
   return enriched.sort((a, b) => b.createdAt - a.createdAt);
@@ -491,8 +546,8 @@ export const listConversations = query({
     const conversations = await Promise.all(
       [...asOne, ...asTwo].map(async (conversation) => ({
         ...conversation,
-        participantOne: await ctx.db.get(conversation.participantOneId),
-        participantTwo: await ctx.db.get(conversation.participantTwoId),
+        participantOne: publicUser(await ctx.db.get(conversation.participantOneId)),
+        participantTwo: publicUser(await ctx.db.get(conversation.participantTwoId)),
         campaign: conversation.campaignId ? await ctx.db.get(conversation.campaignId) : null,
       }))
     );
