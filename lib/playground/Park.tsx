@@ -13,21 +13,21 @@ import type { SpriteId } from "./sprites";
 import { AgentInfoDrawer } from "./AgentInfoDrawer";
 
 // ---- Logical sizing ----
-const SPRITE_HEIGHT = 64;
+const SPRITE_HEIGHT = 96;
 const SPRITE_WIDTH = (SPRITE_HEIGHT * 24) / 32;
-const FEET_W = 16;
-const FEET_H = 8;
-const PLAYER_SPEED = 140; // px/s logical
-const INTERACT_RADIUS = 64;
+const FEET_W = 22;
+const FEET_H = 12;
+const PLAYER_SPEED = 180; // px/s logical
+const INTERACT_RADIUS = 90;
 
-// Agents posted at their stations.
+// Agents posted at their stations (matches new 1280×800 layout).
 const NPC_POSITIONS: Record<Exclude<RoleKey, "user">, { x: number; y: number }> = {
-  ceo:       { x: 110, y: 220 },
-  cto:       { x: 625, y: 200 },
-  developer: { x: 805, y: 200 },
-  designer:  { x: 200, y: 510 },
-  cmo:       { x: 650, y: 480 },
-  marketing: { x: 835, y: 540 },
+  ceo:       { x: 200, y: 350 },  // Boardroom — head of conference table
+  cto:       { x: 880, y: 280 },  // Engineering — desk 1 (top row)
+  developer: { x: 1020, y: 280 }, // Engineering — desk 2 (top row)
+  designer:  { x: 280, y: 700 },  // Design Studio
+  cmo:       { x: 920, y: 660 },  // Marketing — presenter desk
+  marketing: { x: 1100, y: 740 }, // Marketing — guest area
 };
 
 const NPC_LIST = Object.entries(NPC_POSITIONS) as [
@@ -70,9 +70,9 @@ export function Park() {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [scale, setScale] = useState(1);
 
-  // Player position (logical). Spawn in the central corridor facing up.
-  const [player, setPlayer] = useState({ x: 480, y: 470 });
-  const [facing, setFacing] = useState<Facing>("up");
+  // Player position (logical). Spawn in reception by the front desk, facing down.
+  const [player, setPlayer] = useState({ x: 640, y: 130 });
+  const [facing, setFacing] = useState<Facing>("down");
   const [moving, setMoving] = useState(false);
   const [tick, setTick] = useState(0); // for walking bob frame
   const [talkingTo, setTalkingTo] = useState<RoleKey | null>(null);
@@ -309,7 +309,12 @@ function Entity({
   promptShown?: boolean;
 }) {
   const flipX = facing === "left";
-  const bob = walking ? Math.round(Math.sin(walkTick * Math.PI) * 1) : 0;
+  const bob = walking ? (Math.floor(walkTick * 2.4) % 2 === 0 ? 0 : -2) : 0;
+  const walkFrame: 0 | 1 | 2 = walking
+    ? Math.floor(walkTick * 2.4) % 2 === 0
+      ? 1
+      : 2
+    : 0;
 
   return (
     <div
@@ -361,7 +366,7 @@ function Entity({
           ▲ PRESS E
         </div>
       )}
-      <PlaygroundSprite role={role} height={SPRITE_HEIGHT} flipX={flipX} />
+      <PlaygroundSprite role={role} height={SPRITE_HEIGHT} flipX={flipX} walkFrame={walkFrame} />
       {label && (
         <div
           className="font-mono"
