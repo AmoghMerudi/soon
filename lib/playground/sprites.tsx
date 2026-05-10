@@ -343,6 +343,10 @@ const SPRITES: Record<SpriteId, Sprite> = {
   founder: FOUNDER,
 };
 
+// Skip leg + boot palette letters in static rect rendering — drawn procedurally
+// per walk frame so we can do a proper alternating step.
+const PROCEDURAL_LETTERS = new Set(["P", "p", "B", "b"]);
+
 function spriteToRects(sprite: Sprite) {
   const rects: { x: number; y: number; w: number; fill: string }[] = [];
   for (let y = 0; y < sprite.rows.length; y++) {
@@ -350,7 +354,7 @@ function spriteToRects(sprite: Sprite) {
     let x = 0;
     while (x < row.length) {
       const ch = row[x];
-      if (ch === "." || !sprite.palette[ch]) {
+      if (ch === "." || !sprite.palette[ch] || PROCEDURAL_LETTERS.has(ch)) {
         x++;
         continue;
       }
@@ -366,17 +370,62 @@ function spriteToRects(sprite: Sprite) {
 export const PLAYGROUND_SPRITE_W = 24;
 export const PLAYGROUND_SPRITE_H = 32;
 
+type Rect = { x: number; y: number; w: number; h: number; fill: string };
+
+// Draw legs + boots procedurally so we can do a proper 2-frame walk cycle:
+//   frame 0 = idle (both feet planted)
+//   frame 1 = left foot stepping (lifted), right planted
+//   frame 2 = right foot stepping (lifted), left planted
+function drawLegs(palette: Palette, walkFrame: 0 | 1 | 2): Rect[] {
+  const P = palette.P || "#0F0E0C";
+  const rects: Rect[] = [];
+
+  // Pants top (waist), always full
+  rects.push({ x: 8, y: 19, w: 8, h: 3, fill: P });
+
+  if (walkFrame === 0) {
+    // Both legs same length, both feet planted
+    rects.push({ x: 8, y: 22, w: 3, h: 6, fill: P });
+    rects.push({ x: 13, y: 22, w: 3, h: 6, fill: P });
+    addBoot(rects, 7, 28, false);
+    addBoot(rects, 13, 28, true);
+  } else if (walkFrame === 1) {
+    // Left foot stepping (lifted up + slightly inward), right foot planted
+    rects.push({ x: 8, y: 22, w: 3, h: 5, fill: P });   // left leg shorter (knee bent)
+    rects.push({ x: 13, y: 22, w: 3, h: 6, fill: P });  // right leg straight
+    addBoot(rects, 8, 26, false);   // left boot up + shifted right (forward)
+    addBoot(rects, 13, 28, true);   // right boot planted
+  } else {
+    // Mirror: right foot stepping
+    rects.push({ x: 8, y: 22, w: 3, h: 6, fill: P });
+    rects.push({ x: 13, y: 22, w: 3, h: 5, fill: P });
+    addBoot(rects, 7, 28, false);
+    addBoot(rects, 12, 26, true);
+  }
+
+  return rects;
+}
+
+function addBoot(out: Rect[], x: number, y: number, mirror: boolean) {
+  out.push({ x, y, w: 4, h: 1, fill: BOOT });
+  out.push({ x, y: y + 1, w: 4, h: 1, fill: BOOT });
+  out.push({ x: mirror ? x + 3 : x, y: y + 1, w: 1, h: 1, fill: BOOT_SHADE });
+}
+
 export function PlaygroundSprite({
   role,
   height,
   flipX,
+  walkFrame = 0,
 }: {
   role: SpriteId;
   height: number;
   flipX?: boolean;
+  walkFrame?: 0 | 1 | 2;
 }) {
   const sprite = SPRITES[role] ?? SPRITES.developer;
   const rects = spriteToRects(sprite);
+  const legs = drawLegs(sprite.palette, walkFrame);
   const width = (height * PLAYGROUND_SPRITE_W) / PLAYGROUND_SPRITE_H;
   return (
     <svg
@@ -394,6 +443,9 @@ export function PlaygroundSprite({
       <ellipse cx={12} cy={30.5} rx={5} ry={1.2} fill="rgba(0,0,0,0.4)" />
       {rects.map((r, i) => (
         <rect key={i} x={r.x} y={r.y} width={r.w} height={1} fill={r.fill} />
+      ))}
+      {legs.map((r, i) => (
+        <rect key={`l${i}`} x={r.x} y={r.y} width={r.w} height={r.h} fill={r.fill} />
       ))}
     </svg>
   );
