@@ -237,6 +237,7 @@ const SPRITES: Record<RoleKey, Sprite> = {
   developer: DEVELOPER_SPRITE,
   designer: DESIGNER_SPRITE,
   marketing: MARKETING_SPRITE,
+  user: CEO_SPRITE,
 };
 
 function spriteToRects(sprite: Sprite) {
