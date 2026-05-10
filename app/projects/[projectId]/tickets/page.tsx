@@ -41,6 +41,10 @@ function InjectModal({ onClose }: { onClose: () => void }) {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!title.trim()) return;
+    if (!assignee) {
+      setError("Assignee is required");
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
@@ -54,10 +58,10 @@ function InjectModal({ onClose }: { onClose: () => void }) {
         description: description.trim(),
         status: "backlog",
         priority,
-        assignee: assignee || null,
+        assignee,
         tags,
         createdBy: "user",
-        taggedAgents: assignee ? [assignee] : [],
+        taggedAgents: [assignee],
       });
       onClose();
       router.push(`/projects/${projectId}/tickets/${ticketId}`);

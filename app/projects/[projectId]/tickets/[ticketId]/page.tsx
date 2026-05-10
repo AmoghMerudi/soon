@@ -527,7 +527,7 @@ function DispatchCard({
         </div>
       )}
 
-      {status === "failed" && assignee !== "ceo" && (
+      {(status === "failed" || status === "completed") && assignee !== "ceo" && (
         <button
           onClick={onRetry}
           disabled={retrying}
@@ -544,7 +544,11 @@ function DispatchCard({
             cursor: retrying ? "not-allowed" : "pointer",
           }}
         >
-          {retrying ? "RETRYING" : "RETRY DISPATCH"}
+          {retrying
+            ? "RETRYING"
+            : status === "failed"
+              ? "RETRY DISPATCH"
+              : "CONTINUE"}
         </button>
       )}
     </div>
@@ -562,12 +566,11 @@ export default function TicketDetailPage() {
 
   const ticket = useQuery(api.queries.getTicket, { ticketId: id });
   const comments = useQuery(api.queries.getTicketComments, { ticketId: id });
+  const ticketDeliverables = useQuery(api.queries.getDeliverablesByTicket, { ticketId: id });
   const logs = useQuery(api.queries.getAgentLogsByTicket, { ticketId: id });
-  const steps = useQuery(
-    api.agentSteps.getAgentStepsByRun,
-    ticket?.workflowRunId ? { workflowRunId: ticket.workflowRunId } : "skip"
-  );
+  const steps = useQuery(api.agentSteps.getAgentStepsByTicket, { ticketId: id });
   const agentConfigs = useQuery(api.queries.getAgentConfigs);
+  const deps = useQuery(api.queries.getTicketDependencies, { ticketId: id });
   const addComment = useMutation(api.mutations.addComment);
   const retryDispatch = useMutation(api.mutations.retryDispatch);
 
@@ -1195,6 +1198,130 @@ export default function TicketDetailPage() {
             })}
           </span>
         </PropertyRow>
+
+        {deps && deps.dependsOn.length > 0 && (
+          <div style={{ marginTop: 16, borderTop: "1px solid #26241F", paddingTop: 14 }}>
+            <div
+              className="font-sans font-semibold"
+              style={{ fontSize: 13, color: "#8E8B82", marginBottom: 8 }}
+            >
+              Depends On
+            </div>
+            <div className="flex flex-col gap-1.5">
+              {deps.dependsOn.map((d) => {
+                if (!d) return null;
+                const resolved = d.status === "resolved";
+                return (
+                  <a
+                    key={d._id}
+                    href={`/projects/${projectId}/tickets/${d._id}`}
+                    className="flex items-center gap-2"
+                    style={{
+                      background: "#141310",
+                      border: `1px solid ${resolved ? "#244631" : "#5A4A15"}`,
+                      borderRadius: 8,
+                      padding: "6px 10px",
+                      textDecoration: "none",
+                    }}
+                  >
+                    <span style={{ fontSize: 12, color: resolved ? "#7FCFA0" : "#F2C744" }}>
+                      {resolved ? "✓" : "○"}
+                    </span>
+                    <span
+                      className="font-sans truncate"
+                      style={{ fontSize: 12, color: "#FAFAF7", flex: 1 }}
+                    >
+                      {d.title}
+                    </span>
+                  </a>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {deps && deps.dependedOnBy.length > 0 && (
+          <div style={{ marginTop: 16, borderTop: "1px solid #26241F", paddingTop: 14 }}>
+            <div
+              className="font-sans font-semibold"
+              style={{ fontSize: 13, color: "#8E8B82", marginBottom: 8 }}
+            >
+              Blocking
+            </div>
+            <div className="flex flex-col gap-1.5">
+              {deps.dependedOnBy.map((d) => (
+                <a
+                  key={d._id}
+                  href={`/projects/${projectId}/tickets/${d._id}`}
+                  className="flex items-center gap-2"
+                  style={{
+                    background: "#141310",
+                    border: "1px solid #26241F",
+                    borderRadius: 8,
+                    padding: "6px 10px",
+                    textDecoration: "none",
+                  }}
+                >
+                  <span style={{ fontSize: 12, color: "#F0A097" }}>⏳</span>
+                  <span
+                    className="font-sans truncate"
+                    style={{ fontSize: 12, color: "#FAFAF7", flex: 1 }}
+                  >
+                    {d.title}
+                  </span>
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {ticketDeliverables && ticketDeliverables.length > 0 && (
+          <div style={{ marginTop: 16, borderTop: "1px solid #26241F", paddingTop: 14 }}>
+            <div
+              className="font-sans font-semibold"
+              style={{ fontSize: 13, color: "#8E8B82", marginBottom: 8 }}
+            >
+              Deliverables
+            </div>
+            <div className="flex flex-col gap-2">
+              {ticketDeliverables.map((d) => (
+                <a
+                  key={d._id}
+                  href={`/projects/${projectId}/repository`}
+                  className="block"
+                  style={{
+                    background: "#141310",
+                    border: "1px solid #26241F",
+                    borderRadius: 8,
+                    padding: "8px 10px",
+                    textDecoration: "none",
+                  }}
+                >
+                  <div
+                    className="font-sans font-medium"
+                    style={{ fontSize: 12, color: "#FAFAF7", lineHeight: 1.3 }}
+                  >
+                    {d.title}
+                  </div>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span
+                      className="font-mono uppercase"
+                      style={{ fontSize: 10, color: "#F2C744", letterSpacing: "0.06em" }}
+                    >
+                      {d.category}
+                    </span>
+                    <span
+                      className="font-mono"
+                      style={{ fontSize: 10, color: "#5E5C56" }}
+                    >
+                      by {d.createdBy}
+                    </span>
+                  </div>
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

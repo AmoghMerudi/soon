@@ -13,10 +13,15 @@ import { ProjectIdProvider } from "@/lib/dashboard/project-context";
 function navItems(projectId: string) {
   const base = `/projects/${projectId}`;
   return [
-    { id: "tickets",  href: `${base}/tickets`,   label: "Tickets",  glyph: "◆" },
-    { id: "agents",   href: `${base}/agents`,    label: "Agents",   glyph: "●" },
-    { id: "ceo-chat", href: `${base}/ceo-chat`,  label: "CEO Chat", glyph: "✉" },
-    { id: "revenue",  href: `${base}/revenue`,   label: "Revenue",  glyph: "$" },
+    { id: "tickets", href: `${base}/tickets`, label: "Tickets", glyph: "◆" },
+    {
+      id: "repository",
+      href: `${base}/repository`,
+      label: "Repository",
+      glyph: "▤",
+    },
+    { id: "agents", href: `${base}/agents`, label: "Agents", glyph: "●" },
+    { id: "ceo-chat", href: `${base}/ceo-chat`, label: "CEO Chat", glyph: "✉" },
   ];
 }
 
@@ -48,12 +53,6 @@ function TopBar({
         0to1<span style={{ color: "#F2C744" }}>.</span>
       </span>
       <div className="flex-1 flex items-center gap-3.5">
-        <span
-          className="font-mono"
-          style={{ fontSize: 14, color: "#8E8B82", letterSpacing: "0.04em" }}
-        >
-          /projects
-        </span>
         {live && (
           <span
             className="inline-flex items-center gap-1.5 font-mono uppercase"
@@ -101,14 +100,15 @@ function Sidebar({
     const config = agentConfigs?.find((c) => c.agentId === seed.role);
     let state: "working" | "idle" | "blocked" = seed.state;
     if (config) {
-      if (config.status === "active" || config.status === "busy") state = "working";
+      if (config.status === "active" || config.status === "busy")
+        state = "working";
       else if (config.status === "paused") state = "blocked";
       else state = "idle";
     }
     return { role: seed.role, state };
   });
   const activeId = NAV_ITEMS.find(
-    (i) => pathname === i.href || pathname.startsWith(i.href + "/")
+    (i) => pathname === i.href || pathname.startsWith(i.href + "/"),
   )?.id;
 
   return (

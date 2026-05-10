@@ -70,6 +70,40 @@ async function addArtifactStep(input: {
   return { artifactId: id.toString() };
 }
 
+async function saveDeliverableStep(input: {
+  ticketId?: string;
+  title: string;
+  body: string;
+  category: "plan" | "analysis" | "report" | "strategy" | "brief" | "spec" | "other";
+}) {
+  "use step";
+
+  let projectId: string | undefined;
+  if (input.ticketId) {
+    let current = await convex.query(api.queries.getTicket, {
+      ticketId: input.ticketId as any,
+    });
+    while (current && !current.projectId && current.parentTicket) {
+      current = await convex.query(api.queries.getTicket, {
+        ticketId: current.parentTicket,
+      });
+    }
+    projectId = current?.projectId as string | undefined;
+  }
+  if (!projectId) return { error: "Cannot determine project — provide a ticketId" };
+
+  const id = await convex.mutation(api.mutations.createDeliverable, {
+    projectId: projectId as any,
+    ticketId: (input.ticketId || undefined) as any,
+    title: input.title,
+    body: input.body,
+    category: input.category,
+    createdBy: "Designer",
+  });
+
+  return { deliverableId: id.toString(), title: input.title };
+}
+
 async function markBlockedStep(input: {
   ticketId: string;
   reason: string;
@@ -150,6 +184,20 @@ export const designerTools = {
       reason: z.string().describe("The reason the ticket is blocked"),
     }),
     execute: markBlockedStep,
+  },
+
+  saveDeliverable: {
+    description:
+      "Save a deliverable to the repository — design specs, style guides, UX analyses, design briefs. Persists beyond ticket comments for long-term reference.",
+    inputSchema: z.object({
+      ticketId: z.string().optional().describe("Related ticket ID if applicable"),
+      title: z.string().describe("Clear title for the deliverable"),
+      body: z.string().describe("Full content in markdown"),
+      category: z
+        .enum(["plan", "analysis", "report", "strategy", "brief", "spec", "other"])
+        .describe("Type of deliverable"),
+    }),
+    execute: saveDeliverableStep,
   },
 
   exaSearch: exaSearchDurableTool,

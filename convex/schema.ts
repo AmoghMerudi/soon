@@ -8,6 +8,8 @@ export default defineSchema({
     createdAt: v.number(),
     githubRepo: v.optional(v.string()),
     githubOwner: v.optional(v.string()),
+    vercelProjectId: v.optional(v.string()),
+    vercelTeamId: v.optional(v.string()),
   }).index("by_createdAt", ["createdAt"]),
 
   tickets: defineTable({
@@ -37,6 +39,7 @@ export default defineSchema({
     blockedReason: v.optional(v.string()),
     escalatedTo: v.optional(v.string()),
     workflowRunId: v.optional(v.string()),
+    sandboxId: v.optional(v.string()),
     dispatchStatus: v.optional(
       v.union(
         v.literal("pending"),
@@ -46,6 +49,7 @@ export default defineSchema({
       )
     ),
     dispatchErrorDetail: v.optional(v.string()),
+    dependsOn: v.optional(v.array(v.id("tickets"))),
   })
     .index("by_status", ["status"])
     .index("by_assignee", ["assignee"])
@@ -162,6 +166,28 @@ export default defineSchema({
     .index("by_name", ["name"])
     .index("by_agent", ["agent"])
     .index("by_active", ["isActive"]),
+
+  deliverables: defineTable({
+    projectId: v.id("projects"),
+    ticketId: v.optional(v.id("tickets")),
+    title: v.string(),
+    body: v.string(),
+    category: v.union(
+      v.literal("plan"),
+      v.literal("analysis"),
+      v.literal("report"),
+      v.literal("strategy"),
+      v.literal("brief"),
+      v.literal("spec"),
+      v.literal("other")
+    ),
+    createdBy: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_project", ["projectId", "createdAt"])
+    .index("by_ticket", ["ticketId"])
+    .index("by_category", ["projectId", "category"]),
 
   ceoChatThreads: defineTable({
     projectId: v.optional(v.id("projects")),

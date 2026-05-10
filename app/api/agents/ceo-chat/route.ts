@@ -71,7 +71,7 @@ export async function POST(request: Request) {
     projectId,
     CEO_AGENT_ID,
     lastUserText || "current work",
-    6
+    6,
   );
 
   const tools = {
@@ -80,7 +80,7 @@ export async function POST(request: Request) {
   };
 
   const agent = new ToolLoopAgent({
-    model: openai("gpt-4o"),
+    model: openai("gpt-5.4"),
     instructions: CEO_CHAT_INSTRUCTIONS + formatRecalledForPrompt(recalled),
     tools,
   });

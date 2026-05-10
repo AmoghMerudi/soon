@@ -1,5 +1,6 @@
 import { ConvexError, v } from "convex/values";
 import type { MutationCtx } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
 import { mutation, internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
 
@@ -81,6 +82,22 @@ async function syncAssigneeState(
     return;
   }
 
+  const ticketDoc = await ctx.db.get(ticketId as Id<"tickets">);
+  if (ticketDoc?.dependsOn && ticketDoc.dependsOn.length > 0) {
+    const deps = await Promise.all(ticketDoc.dependsOn.map((depId: Id<"tickets">) => ctx.db.get(depId)));
+    const unresolved = deps.filter((d) => d && d.status !== "resolved");
+    if (unresolved.length > 0) {
+      await ctx.db.insert("agentLogs", {
+        agent: nextAssignee,
+        action: "dispatch_waiting",
+        details: `Waiting on ${unresolved.length} dependency ticket(s) to resolve before dispatch`,
+        ticketId,
+        projectId: ticketDoc.projectId,
+      });
+      return;
+    }
+  }
+
   await ctx.scheduler.runAfter(0, internal.dispatch.dispatchAgent, {
     ticketId,
     agentRole: nextAssignee,
@@ -94,6 +111,8 @@ export const updateProject = mutation({
     githubRepo: v.optional(v.string()),
     githubOwner: v.optional(v.string()),
     description: v.optional(v.string()),
+    vercelProjectId: v.optional(v.string()),
+    vercelTeamId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const { projectId, ...fields } = args;
@@ -101,6 +120,8 @@ export const updateProject = mutation({
     if (fields.githubRepo !== undefined) patch.githubRepo = fields.githubRepo;
     if (fields.githubOwner !== undefined) patch.githubOwner = fields.githubOwner;
     if (fields.description !== undefined) patch.description = fields.description;
+    if (fields.vercelProjectId !== undefined) patch.vercelProjectId = fields.vercelProjectId;
+    if (fields.vercelTeamId !== undefined) patch.vercelTeamId = fields.vercelTeamId;
     await ctx.db.patch(projectId, patch);
   },
 });
@@ -112,11 +133,12 @@ export const createTicket = mutation({
     description: v.string(),
     status: statusValidator,
     priority: priorityValidator,
-    assignee: v.union(v.string(), v.null()),
+    assignee: v.string(),
     tags: v.array(v.string()),
     createdBy: v.string(),
     taggedAgents: v.array(v.string()),
     parentTicket: v.optional(v.id("tickets")),
+    dependsOn: v.optional(v.array(v.id("tickets"))),
   },
   handler: async (ctx, args) => {
     const assignee = normalizeAssignee(args.assignee);
@@ -145,6 +167,7 @@ export const createTicket = mutation({
       taggedAgents: args.taggedAgents,
       parentTicket: args.parentTicket,
       depth,
+      dependsOn: args.dependsOn,
       dispatchStatus: assignee ? "pending" : undefined,
     });
 
@@ -160,10 +183,11 @@ export const createSubTicket = mutation({
     title: v.string(),
     description: v.string(),
     priority: priorityValidator,
-    assignee: v.union(v.string(), v.null()),
+    assignee: v.string(),
     createdBy: v.string(),
     tags: v.optional(v.array(v.string())),
     taggedAgents: v.optional(v.array(v.string())),
+    dependsOn: v.optional(v.array(v.id("tickets"))),
   },
   handler: async (ctx, args) => {
     const assignee = normalizeAssignee(args.assignee);
@@ -186,6 +210,7 @@ export const createSubTicket = mutation({
       taggedAgents: args.taggedAgents ?? parent.taggedAgents,
       parentTicket: args.parentTicket,
       depth,
+      dependsOn: args.dependsOn,
       dispatchStatus: assignee ? "pending" : undefined,
     });
 
@@ -230,6 +255,46 @@ export const updateTicketStatus = mutation({
     }
 
     await ctx.db.patch(args.ticketId, patch);
+
+    // When a ticket is resolved, check if any dependent tickets are now unblocked
+    if (args.status === "resolved") {
+      const allTickets = ticket.projectId
+        ? await ctx.db
+            .query("tickets")
+            .withIndex("by_project_status", (q) => q.eq("projectId", ticket.projectId!))
+            .collect()
+        : await ctx.db.query("tickets").collect();
+
+      for (const dependent of allTickets) {
+        if (!dependent.dependsOn || !dependent.dependsOn.includes(args.ticketId)) continue;
+        if (!dependent.assignee) continue;
+        if (dependent.dispatchStatus === "running" || dependent.dispatchStatus === "completed") continue;
+
+        const deps = await Promise.all(dependent.dependsOn.map((depId) => ctx.db.get(depId)));
+        const unresolved = deps.filter((d) => d && d._id !== args.ticketId && d.status !== "resolved");
+        if (unresolved.length > 0) continue;
+
+        await ctx.db.insert("agentLogs", {
+          agent: dependent.assignee,
+          action: "dependency_unblocked",
+          details: `All dependencies resolved — dispatching`,
+          ticketId: dependent._id,
+          projectId: dependent.projectId,
+        });
+
+        if (dependent.assignee === "ceo") continue;
+
+        await ctx.db.patch(dependent._id, {
+          dispatchStatus: "pending",
+        });
+
+        await ctx.scheduler.runAfter(0, internal.dispatch.dispatchAgent, {
+          ticketId: dependent._id,
+          agentRole: dependent.assignee,
+          attempt: 0,
+        });
+      }
+    }
   },
 });
 
@@ -302,6 +367,20 @@ export const storeWorkflowRun = mutation({
   },
 });
 
+export const storeSandboxId = mutation({
+  args: {
+    ticketId: v.id("tickets"),
+    sandboxId: v.union(v.string(), v.null()),
+  },
+  handler: async (ctx, args) => {
+    const ticket = await ctx.db.get(args.ticketId);
+    if (!ticket) return;
+    await ctx.db.patch(args.ticketId, {
+      sandboxId: args.sandboxId ?? undefined,
+    });
+  },
+});
+
 export const _storeWorkflowRunInternal = internalMutation({
   args: {
     ticketId: v.id("tickets"),
@@ -370,6 +449,67 @@ export const retryDispatch = mutation({
     });
 
     return { status: "pending", via: "dispatch" as const };
+  },
+});
+
+export const addDependency = mutation({
+  args: {
+    ticketId: v.id("tickets"),
+    dependsOnTicketId: v.id("tickets"),
+  },
+  handler: async (ctx, args) => {
+    if (args.ticketId === args.dependsOnTicketId) {
+      throw new ConvexError("a ticket cannot depend on itself");
+    }
+
+    const ticket = await ctx.db.get(args.ticketId);
+    if (!ticket) throw new ConvexError("ticket not found");
+
+    const dep = await ctx.db.get(args.dependsOnTicketId);
+    if (!dep) throw new ConvexError("dependency ticket not found");
+
+    const current = ticket.dependsOn ?? [];
+    if (current.includes(args.dependsOnTicketId)) {
+      return { ok: true, alreadyExists: true };
+    }
+
+    // Prevent circular dependencies (simple check: dep can't already depend on this ticket)
+    const depDeps = dep.dependsOn ?? [];
+    if (depDeps.includes(args.ticketId)) {
+      throw new ConvexError("circular dependency detected");
+    }
+
+    await ctx.db.patch(args.ticketId, {
+      dependsOn: [...current, args.dependsOnTicketId],
+    });
+
+    await ctx.db.insert("agentLogs", {
+      agent: "system",
+      action: "dependency_added",
+      details: `Now depends on ticket ${args.dependsOnTicketId}`,
+      ticketId: args.ticketId,
+      projectId: ticket.projectId,
+    });
+
+    return { ok: true };
+  },
+});
+
+export const removeDependency = mutation({
+  args: {
+    ticketId: v.id("tickets"),
+    dependsOnTicketId: v.id("tickets"),
+  },
+  handler: async (ctx, args) => {
+    const ticket = await ctx.db.get(args.ticketId);
+    if (!ticket) throw new ConvexError("ticket not found");
+
+    const current = ticket.dependsOn ?? [];
+    await ctx.db.patch(args.ticketId, {
+      dependsOn: current.filter((id) => id !== args.dependsOnTicketId),
+    });
+
+    return { ok: true };
   },
 });
 
@@ -483,10 +623,17 @@ export const addComment = mutation({
       if (agentId === "ceo") continue;
       if (!WIRED_MENTION_AGENTS.has(agentId)) continue;
 
+      await ctx.db.patch(args.ticketId, {
+        workflowRunId: undefined,
+        dispatchStatus: "pending",
+        dispatchErrorDetail: undefined,
+      });
+
       await ctx.scheduler.runAfter(0, internal.dispatch.dispatchAgent, {
         ticketId: args.ticketId,
         agentRole: agentId,
         attempt: 0,
+        triggerComment: args.content,
       });
     }
 
@@ -570,6 +717,75 @@ export const logAgentAction = mutation({
       details: args.details,
       ticketId: args.ticketId,
     });
+  },
+});
+
+export const createDeliverable = mutation({
+  args: {
+    projectId: v.id("projects"),
+    ticketId: v.optional(v.id("tickets")),
+    title: v.string(),
+    body: v.string(),
+    category: v.union(
+      v.literal("plan"),
+      v.literal("analysis"),
+      v.literal("report"),
+      v.literal("strategy"),
+      v.literal("brief"),
+      v.literal("spec"),
+      v.literal("other")
+    ),
+    createdBy: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    const id = await ctx.db.insert("deliverables", {
+      projectId: args.projectId,
+      ticketId: args.ticketId,
+      title: args.title,
+      body: args.body,
+      category: args.category,
+      createdBy: args.createdBy,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    await ctx.db.insert("agentLogs", {
+      projectId: args.projectId,
+      agent: args.createdBy,
+      action: "create_deliverable",
+      details: `Saved deliverable: ${args.title} [${args.category}]`,
+      ticketId: args.ticketId,
+    });
+
+    return id;
+  },
+});
+
+export const updateDeliverable = mutation({
+  args: {
+    deliverableId: v.id("deliverables"),
+    title: v.optional(v.string()),
+    body: v.optional(v.string()),
+    category: v.optional(
+      v.union(
+        v.literal("plan"),
+        v.literal("analysis"),
+        v.literal("report"),
+        v.literal("strategy"),
+        v.literal("brief"),
+        v.literal("spec"),
+        v.literal("other")
+      )
+    ),
+  },
+  handler: async (ctx, args) => {
+    const { deliverableId, ...fields } = args;
+    const patch: Record<string, unknown> = { updatedAt: Date.now() };
+    if (fields.title !== undefined) patch.title = fields.title;
+    if (fields.body !== undefined) patch.body = fields.body;
+    if (fields.category !== undefined) patch.category = fields.category;
+    await ctx.db.patch(deliverableId, patch);
   },
 });
 

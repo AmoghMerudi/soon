@@ -96,3 +96,14 @@ export const seed = mutation({
     return { count: results.length, results };
   },
 });
+
+export const clearAllQueues = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const configs = await ctx.db.query("agentConfig").collect();
+    for (const config of configs) {
+      await ctx.db.patch(config._id, { currentTicketIds: [] });
+    }
+    return { cleared: configs.length };
+  },
+});

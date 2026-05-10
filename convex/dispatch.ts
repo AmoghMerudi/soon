@@ -61,8 +61,9 @@ export const dispatchAgent = internalAction({
     agentRole: v.string(),
     projectId: v.optional(v.id("projects")),
     attempt: v.optional(v.number()),
+    triggerComment: v.optional(v.string()),
   },
-  handler: async (ctx, { ticketId, agentRole, projectId, attempt = 0 }) => {
+  handler: async (ctx, { ticketId, agentRole, projectId, attempt = 0, triggerComment }) => {
     const normalizedRole = agentRole.toLowerCase();
 
     async function failDispatch(details: string) {
@@ -76,6 +77,7 @@ export const dispatchAgent = internalAction({
             agentRole: normalizedRole,
             projectId,
             attempt: nextAttempt,
+            triggerComment,
           }
         );
         await ctx.runMutation(internal.mutations._logAgentActionInternal, {
@@ -136,7 +138,7 @@ export const dispatchAgent = internalAction({
       const response = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ticketId, projectId }),
+        body: JSON.stringify({ ticketId, projectId, triggerComment }),
       });
 
       if (!response.ok) {
