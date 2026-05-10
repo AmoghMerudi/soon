@@ -29,6 +29,16 @@ function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
 }
 
+function requireServerSecret(serverSecret: string) {
+  const expected =
+    process.env.COLLABHUB_AUTH_SECRET ??
+    process.env.AUTH_SECRET ??
+    (process.env.NODE_ENV === "production" ? undefined : "collabhub-dev-secret-change-me");
+  if (!expected || serverSecret !== expected) {
+    throw new ConvexError("unauthorized");
+  }
+}
+
 function requireText(value: string, field: string) {
   const trimmed = value.trim();
   if (!trimmed) throw new ConvexError(`${field} is required`);
@@ -99,6 +109,22 @@ export const getUser = query({
   },
 });
 
+export const getUserForAuth = query({
+  args: {
+    email: v.string(),
+    serverSecret: v.string(),
+  },
+  handler: async (ctx, { email, serverSecret }) => {
+    requireServerSecret(serverSecret);
+    const normalized = normalizeEmail(email);
+    if (!normalized) return null;
+    return await ctx.db
+      .query("collabUsers")
+      .withIndex("by_email", (q) => q.eq("email", normalized))
+      .first();
+  },
+});
+
 export const upsertUser = mutation({
   args: {
     email: v.string(),
@@ -134,6 +160,57 @@ export const upsertUser = mutation({
     return await ctx.db.insert("collabUsers", {
       email,
       ...patch,
+      subscriptionTier: "free",
+      subscriptionStatus: "inactive",
+      createdAt: now,
+    });
+  },
+});
+
+export const registerPasswordUser = mutation({
+  args: {
+    email: v.string(),
+    passwordHash: v.string(),
+    name: v.string(),
+    role: roleValidator,
+    companyName: v.optional(v.string()),
+    niche: v.optional(v.string()),
+    serverSecret: v.string(),
+  },
+  handler: async (ctx, args) => {
+    requireServerSecret(args.serverSecret);
+    const email = normalizeEmail(args.email);
+    const name = requireText(args.name, "name");
+    const passwordHash = requireText(args.passwordHash, "password hash");
+    if (!email.includes("@")) throw new ConvexError("valid email is required");
+
+    const now = Date.now();
+    const existing = await ctx.db
+      .query("collabUsers")
+      .withIndex("by_email", (q) => q.eq("email", email))
+      .first();
+
+    if (existing?.passwordHash) {
+      throw new ConvexError("account already exists");
+    }
+
+    const userFields = {
+      email,
+      passwordHash,
+      name,
+      role: args.role,
+      companyName: args.companyName?.trim() || undefined,
+      niche: args.niche?.trim() || undefined,
+      updatedAt: now,
+    };
+
+    if (existing) {
+      await ctx.db.patch(existing._id, userFields);
+      return existing._id;
+    }
+
+    return await ctx.db.insert("collabUsers", {
+      ...userFields,
       subscriptionTier: "free",
       subscriptionStatus: "inactive",
       createdAt: now,

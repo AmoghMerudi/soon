@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, Suspense, useMemo, useState } from "react";
+import { FormEvent, Suspense, useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -33,7 +33,7 @@ function CollabHubLoading() {
 function CollabHubWorkspace() {
   const searchParams = useSearchParams();
   const [sessionUserId, setSessionUserId] = useState<Id<"collabUsers"> | null>(null);
-  const [loginEmail, setLoginEmail] = useState("");
+  const [sessionLoading, setSessionLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>("marketplace");
   const [selectedConversationId, setSelectedConversationId] =
     useState<Id<"collabConversations"> | null>(null);
@@ -43,10 +43,6 @@ function CollabHubWorkspace() {
   const currentUser = useQuery(
     api.collabhub.getUser,
     sessionUserId ? { userId: sessionUserId } : "skip"
-  );
-  const loginLookup = useQuery(
-    api.collabhub.getUserByEmail,
-    loginEmail.includes("@") ? { email: loginEmail } : "skip"
   );
   const campaigns = useQuery(api.collabhub.listCampaigns, {
     currentUserId: sessionUserId ?? undefined,
@@ -75,7 +71,6 @@ function CollabHubWorkspace() {
       : "skip"
   );
 
-  const upsertUser = useMutation(api.collabhub.upsertUser);
   const updateProfile = useMutation(api.collabhub.updateProfile);
   const createCampaign = useMutation(api.collabhub.createCampaign);
   const applyToCampaign = useMutation(api.collabhub.applyToCampaign);
@@ -86,6 +81,23 @@ function CollabHubWorkspace() {
   const applications = currentUser?.role === "brand" ? brandApplications : influencerApplications;
   const selectedConversation = conversations?.find((item) => item._id === selectedConversationId);
   const billingStatus = searchParams.get("billing");
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadSession() {
+      try {
+        const response = await fetch("/api/collabhub/auth/me");
+        const result = (await response.json()) as { userId?: Id<"collabUsers"> | null };
+        if (!cancelled && result.userId) setSessionUserId(result.userId);
+      } finally {
+        if (!cancelled) setSessionLoading(false);
+      }
+    }
+    void loadSession();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const dashboardStats = useMemo(() => {
     if (currentUser?.role === "brand") {
@@ -105,26 +117,52 @@ function CollabHubWorkspace() {
   async function handleRegister(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    const role = String(form.get("role") ?? "influencer") as Role;
-    const userId = await upsertUser({
-      email: String(form.get("email") ?? ""),
-      name: String(form.get("name") ?? ""),
-      role,
-      companyName: String(form.get("companyName") ?? "") || undefined,
-      niche: String(form.get("niche") ?? "") || undefined,
+    const response = await fetch("/api/collabhub/auth/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: String(form.get("email") ?? ""),
+        password: String(form.get("password") ?? ""),
+        name: String(form.get("name") ?? ""),
+        role: String(form.get("role") ?? "influencer") as Role,
+        companyName: String(form.get("companyName") ?? "") || undefined,
+        niche: String(form.get("niche") ?? "") || undefined,
+      }),
     });
-    setSessionUserId(userId);
+    const result = (await response.json()) as { userId?: Id<"collabUsers">; error?: string };
+    if (!response.ok || !result.userId) {
+      setNotice(result.error ?? "Unable to create account.");
+      return;
+    }
+    setSessionUserId(result.userId);
     setNotice("Account ready. You can now manage CollabHub data.");
   }
 
-  function handleLogin(event: FormEvent<HTMLFormElement>) {
+  async function handleLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!loginLookup) {
-      setNotice("No CollabHub account found for that email yet.");
+    const form = new FormData(event.currentTarget);
+    const response = await fetch("/api/collabhub/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: String(form.get("email") ?? ""),
+        password: String(form.get("password") ?? ""),
+      }),
+    });
+    const result = (await response.json()) as { userId?: Id<"collabUsers">; error?: string };
+    if (!response.ok || !result.userId) {
+      setNotice(result.error ?? "Unable to log in.");
       return;
     }
-    setSessionUserId(loginLookup._id);
-    setNotice(`Welcome back, ${loginLookup.name}.`);
+    setSessionUserId(result.userId);
+    setNotice("Welcome back.");
+  }
+
+  async function handleSignOut() {
+    await fetch("/api/collabhub/auth/logout", { method: "POST" });
+    setSessionUserId(null);
+    setSelectedConversationId(null);
+    setNotice("Signed out.");
   }
 
   async function handleCreateCampaign(event: FormEvent<HTMLFormElement>) {
@@ -267,7 +305,7 @@ function CollabHubWorkspace() {
               </div>
               <button
                 className="mt-4 rounded-full border border-white/15 px-4 py-2 text-white/70"
-                onClick={() => setSessionUserId(null)}
+                onClick={handleSignOut}
                 type="button"
               >
                 Sign out
@@ -291,10 +329,12 @@ function CollabHubWorkspace() {
           </div>
         )}
 
-        {!currentUser ? (
+        {sessionLoading ? (
+          <div className="mt-10 rounded-[2rem] border border-white/10 bg-white/[0.05] p-8 text-white/60">
+            Restoring your session...
+          </div>
+        ) : !currentUser ? (
           <AuthPanels
-            loginEmail={loginEmail}
-            onLoginEmailChange={setLoginEmail}
             onLogin={handleLogin}
             onRegister={handleRegister}
           />
@@ -373,15 +413,11 @@ function CollabHubWorkspace() {
 }
 
 function AuthPanels({
-  loginEmail,
-  onLoginEmailChange,
   onLogin,
   onRegister,
 }: {
-  loginEmail: string;
-  onLoginEmailChange: (value: string) => void;
-  onLogin: (event: FormEvent<HTMLFormElement>) => void;
-  onRegister: (event: FormEvent<HTMLFormElement>) => void;
+  onLogin: (event: FormEvent<HTMLFormElement>) => Promise<void>;
+  onRegister: (event: FormEvent<HTMLFormElement>) => Promise<void>;
 }) {
   return (
     <section className="mt-10 grid gap-5 lg:grid-cols-2">
@@ -390,6 +426,7 @@ function AuthPanels({
         <div className="mt-6 grid gap-3">
           <Field label="Name" name="name" placeholder="Ava Kim" required />
           <Field label="Email" name="email" placeholder="ava@example.com" required type="email" />
+          <Field label="Password" name="password" placeholder="At least 8 characters" required type="password" />
           <label className="text-sm text-white/58">
             Account type
             <select className="mt-2 w-full rounded-2xl border border-white/10 bg-[#111116] px-4 py-3 text-white" name="role">
@@ -408,19 +445,11 @@ function AuthPanels({
       <form className="rounded-[2rem] border border-white/10 bg-white/[0.05] p-6" onSubmit={onLogin}>
         <h2 className="text-2xl font-semibold">Log in by email</h2>
         <p className="mt-2 text-sm text-white/56">
-          This MVP uses a lightweight email session while full password/social auth is added.
+          Passwords are hashed server-side and the session is stored in an HTTP-only cookie.
         </p>
         <div className="mt-6 grid gap-3">
-          <label className="text-sm text-white/58">
-            Email
-            <input
-              className="mt-2 w-full rounded-2xl border border-white/10 bg-[#111116] px-4 py-3 text-white outline-none focus:border-white/30"
-              onChange={(event) => onLoginEmailChange(event.target.value)}
-              placeholder="you@example.com"
-              type="email"
-              value={loginEmail}
-            />
-          </label>
+          <Field label="Email" name="email" placeholder="you@example.com" required type="email" />
+          <Field label="Password" name="password" placeholder="Your password" required type="password" />
           <button className="rounded-full border border-white/15 px-5 py-3 font-bold text-white" type="submit">
             Log in
           </button>
