@@ -2,8 +2,8 @@ function configured(value: string | undefined) {
   return Boolean(value && value.trim());
 }
 
-function item(name: string, isConfigured: boolean, help: string) {
-  return { name, configured: isConfigured, help };
+function item(name: string, isConfigured: boolean, help: string, required = true) {
+  return { name, configured: isConfigured, help, required };
 }
 
 export async function GET() {
@@ -52,10 +52,17 @@ export async function GET() {
       configured(process.env.NEXT_PUBLIC_APPLE_CLIENT_ID ?? process.env.APPLE_CLIENT_ID),
       "Set NEXT_PUBLIC_APPLE_CLIENT_ID to enable Continue with Apple."
     ),
+    item(
+      "Demo seed tools",
+      process.env.COLLABHUB_ENABLE_TEST_TOOLS === "true",
+      "Optional. Set COLLABHUB_ENABLE_TEST_TOOLS=true to enable /collabhub/test demo data seeding.",
+      false
+    ),
   ];
 
   return Response.json({
-    ready: checks.every((check) => check.configured),
+    ready: checks.every((check) => !check.required || check.configured),
+    testToolsEnabled: process.env.COLLABHUB_ENABLE_TEST_TOOLS === "true",
     checks,
   });
 }

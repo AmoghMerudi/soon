@@ -7,12 +7,24 @@ type ConfigCheck = {
   name: string;
   configured: boolean;
   help: string;
+  required: boolean;
 };
 
 type ConfigResponse = {
   ready: boolean;
+  testToolsEnabled: boolean;
   checks: ConfigCheck[];
 };
+
+type SeedResponse =
+  | {
+      ok: true;
+      credentials: {
+        brand: { email: string; password: string };
+        influencer: { email: string; password: string };
+      };
+    }
+  | { error: string };
 
 const testFlows = [
   {
@@ -62,6 +74,8 @@ export default function CollabHubTestPage() {
   const [sessionStatus, setSessionStatus] = useState<"checking" | "signed-in" | "signed-out" | "error">(
     "checking"
   );
+  const [seedResult, setSeedResult] = useState<SeedResponse | null>(null);
+  const [seeding, setSeeding] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -79,6 +93,19 @@ export default function CollabHubTestPage() {
     }
     void load();
   }, []);
+
+  async function handleSeedDemoData() {
+    setSeeding(true);
+    setSeedResult(null);
+    try {
+      const response = await fetch("/api/collabhub/test/seed", { method: "POST" });
+      setSeedResult((await response.json()) as SeedResponse);
+    } catch (error) {
+      setSeedResult({ error: error instanceof Error ? error.message : "Unable to seed demo data" });
+    } finally {
+      setSeeding(false);
+    }
+  }
 
   return (
     <main className="min-h-screen bg-[#08080A] px-5 py-8 text-white sm:px-8">
@@ -122,7 +149,7 @@ export default function CollabHubTestPage() {
                         check.configured ? "bg-[#80FFB0]/15 text-[#80FFB0]" : "bg-[#FFB088]/15 text-[#FFB088]"
                       }`}
                     >
-                      {check.configured ? "Ready" : "Missing"}
+                      {check.configured ? "Ready" : check.required ? "Missing" : "Optional"}
                     </span>
                   </div>
                   <p className="mt-2 text-sm text-white/48">{check.help}</p>
@@ -142,6 +169,49 @@ export default function CollabHubTestPage() {
             <p className="mt-3 text-white/56">
               If signed out, open the web app and create a test brand or influencer account first.
             </p>
+            <div className="mt-5 rounded-3xl border border-white/10 bg-[#111116] p-5">
+              <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+                <div>
+                  <h3 className="font-semibold">Seed demo marketplace data</h3>
+                  <p className="mt-1 text-sm text-white/50">
+                    Creates demo brand/influencer accounts, one campaign, an accepted application,
+                    and starter messages.
+                  </p>
+                </div>
+                <button
+                  className="rounded-full bg-white px-5 py-3 text-sm font-bold text-[#101014] disabled:cursor-not-allowed disabled:bg-white/20 disabled:text-white/35"
+                  disabled={!config?.testToolsEnabled || seeding}
+                  onClick={handleSeedDemoData}
+                  type="button"
+                >
+                  {seeding ? "Seeding..." : "Seed demo data"}
+                </button>
+              </div>
+              {!config?.testToolsEnabled && (
+                <p className="mt-3 text-xs text-[#FFB088]">
+                  Disabled. Set COLLABHUB_ENABLE_TEST_TOOLS=true and restart the app to enable this.
+                </p>
+              )}
+              {seedResult && "error" in seedResult && (
+                <p className="mt-3 rounded-2xl bg-[#FFB088]/10 p-3 text-sm text-[#FFB088]">
+                  {seedResult.error}
+                </p>
+              )}
+              {seedResult && "ok" in seedResult && (
+                <div className="mt-3 grid gap-3 rounded-2xl bg-[#80FFB0]/10 p-4 text-sm text-[#BFFFF0] sm:grid-cols-2">
+                  <div>
+                    <div className="font-semibold">Demo brand</div>
+                    <div>{seedResult.credentials.brand.email}</div>
+                    <div>Password: {seedResult.credentials.brand.password}</div>
+                  </div>
+                  <div>
+                    <div className="font-semibold">Demo influencer</div>
+                    <div>{seedResult.credentials.influencer.email}</div>
+                    <div>Password: {seedResult.credentials.influencer.password}</div>
+                  </div>
+                </div>
+              )}
+            </div>
             <div className="mt-6 grid gap-3">
               {testFlows.map((flow) => (
                 <article className="rounded-3xl bg-[#111116] p-5" key={flow.title}>

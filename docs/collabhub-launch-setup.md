@@ -80,13 +80,22 @@ Open:
 /collabhub/test
 ```
 
+To use the demo-data seed button locally or in a private preview environment, set:
+
+```bash
+COLLABHUB_ENABLE_TEST_TOOLS=true
+```
+
+Keep this unset or `false` for public production deployments.
+
 Then verify:
 
 1. Environment checks are ready.
-2. Password auth works.
-3. Google/Apple auth works if configured.
-4. Brand can post a campaign.
-5. Influencer can apply.
-6. Brand can review applications.
-7. Messaging persists after refresh.
-8. Stripe test checkout updates the subscription after webhook delivery.
+2. Optional: click **Seed demo data** to create demo brand/influencer accounts, a campaign, an accepted application, and starter messages.
+3. Password auth works with the demo credentials or your own accounts.
+4. Google/Apple auth works if configured.
+5. Brand can post a campaign.
+6. Influencer can apply.
+7. Brand can review applications.
+8. Messaging persists after refresh.
+9. Stripe test checkout updates the subscription after webhook delivery.
