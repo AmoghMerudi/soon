@@ -125,9 +125,9 @@ export default function CollabHubTestPage() {
           </div>
           <Link
             className="rounded-full bg-white px-5 py-3 text-center text-sm font-bold text-[#101014]"
-            href="/collabhub"
+            href="/collabhub/demo"
           >
-            Open web app
+            Open instant demo
           </Link>
         </header>
 
@@ -226,6 +226,19 @@ export default function CollabHubTestPage() {
                   </ul>
                 </article>
               ))}
+            </div>
+            <div className="mt-5 rounded-3xl border border-white/10 bg-white/[0.05] p-5">
+              <h3 className="font-semibold">Fastest place to test</h3>
+              <p className="mt-2 text-sm text-white/56">
+                Use the instant demo if you want to click through the finished web app without
+                setting up Convex, Stripe, Google, or Apple first.
+              </p>
+              <Link
+                className="mt-4 inline-flex rounded-full bg-white px-5 py-3 text-sm font-bold text-[#101014]"
+                href="/collabhub/demo"
+              >
+                Test web app now
+              </Link>
             </div>
           </div>
         </section>

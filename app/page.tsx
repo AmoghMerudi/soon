@@ -87,6 +87,9 @@ export default function Home() {
               <a className="transition hover:text-white" href="/collabhub/test">
                 Test
               </a>
+              <a className="transition hover:text-white" href="/collabhub/demo">
+                Demo
+              </a>
             </div>
             <a
               className="rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm font-semibold text-white backdrop-blur transition hover:bg-white/16"
@@ -112,15 +115,15 @@ export default function Home() {
               <div className="mt-9 flex flex-col gap-3 sm:flex-row">
                 <a
                   className="rounded-full bg-white px-6 py-3 text-center text-sm font-bold text-[#111] transition hover:scale-[1.02]"
-                  href="/collabhub"
+                  href="/collabhub/demo"
                 >
-                  Start building your profile
+                  Test instant demo
                 </a>
                 <a
                   className="rounded-full border border-white/15 px-6 py-3 text-center text-sm font-bold text-white transition hover:bg-white/10"
-                  href="#campaigns"
+                  href="/collabhub"
                 >
-                  Browse sample campaigns
+                  Open connected app
                 </a>
               </div>
               <div className="mt-10 grid max-w-2xl grid-cols-3 gap-3">
@@ -345,6 +348,9 @@ export default function Home() {
           <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
             <a className="rounded-full bg-white px-6 py-3 text-sm font-bold text-[#111]" href="/collabhub">
               Open CollabHub app
+            </a>
+            <a className="rounded-full border border-white/15 px-6 py-3 text-sm font-bold text-white" href="/collabhub/demo">
+              Test instant demo
             </a>
             <a className="rounded-full border border-white/15 px-6 py-3 text-sm font-bold text-white" href="/collabhub/test">
               Open test center

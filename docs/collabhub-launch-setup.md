@@ -74,6 +74,14 @@ https://your-domain.com/api/collabhub/billing/webhook
 
 ## Web test flow
 
+For immediate testing without any external services, open:
+
+```text
+/collabhub/demo
+```
+
+This browser-only demo uses localStorage and includes sample brand/influencer accounts, campaigns, applications, and messages.
+
 Open:
 
 ```text

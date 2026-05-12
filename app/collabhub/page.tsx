@@ -355,6 +355,12 @@ function CollabHubWorkspace() {
           >
             Test center
           </Link>
+          <Link
+            className="rounded-full bg-white px-5 py-3 text-center text-sm font-bold text-[#101014]"
+            href="/collabhub/demo"
+          >
+            Instant demo
+          </Link>
         </header>
 
         {notice && (
