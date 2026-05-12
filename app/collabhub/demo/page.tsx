@@ -173,15 +173,11 @@ function loadDemoState() {
 }
 
 export default function CollabHubDemoPage() {
-  const [state, setState] = useState<DemoState>(initialState);
+  const [state, setState] = useState<DemoState>(() => loadDemoState());
   const [currentUserId, setCurrentUserId] = useState("brand-glowhaus");
   const [activeTab, setActiveTab] = useState<Tab>("marketplace");
   const [selectedConversationId, setSelectedConversationId] = useState("conversation-glowhaus-ava");
   const [notice, setNotice] = useState("Demo mode uses browser localStorage. No external setup required.");
-
-  useEffect(() => {
-    setState(loadDemoState());
-  }, []);
 
   useEffect(() => {
     window.localStorage.setItem(storageKey, JSON.stringify(state));
