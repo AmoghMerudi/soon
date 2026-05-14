@@ -82,10 +82,19 @@ function ToolCallIndicator({
     listTickets: "Checking tickets",
     loadSkill: "Activating skill",
     askQuestion: "Waiting for your answer",
+    searchComposioTools: "Searching Composio tools",
   };
 
   const isDone = done ?? output !== undefined;
-  const label = labels[toolName] ?? toolName;
+  // Composio toolkit slugs come through prefixed (e.g. SLACK_FIND_CHANNELS).
+  // Render them with a more readable label than the raw slug.
+  const composioMatch = /^([A-Z0-9]+)_(.+)$/.exec(toolName);
+  const fallbackLabel = composioMatch
+    ? `${composioMatch[1].toLowerCase()} · ${composioMatch[2]
+        .toLowerCase()
+        .replace(/_/g, " ")}`
+    : toolName;
+  const label = labels[toolName] ?? fallbackLabel;
 
   let detail = "";
   if (toolName === "loadSkill" && input?.name) {

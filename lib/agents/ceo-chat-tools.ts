@@ -18,8 +18,8 @@ export function createCeoChatTools(projectId: Id<"projects">): ToolSet {
         priority: z.enum(["critical", "high", "medium", "low"]),
         tags: z.array(z.string()).describe('e.g. ["engineering", "infra"]'),
         assignee: z
-          .nullable(z.string())
-          .describe("Agent role to assign: Developer, Designer, Marketing, or null"),
+          .string()
+          .describe("REQUIRED agent role: CTO, CMO, Developer, Designer, or Marketing"),
         taggedAgents: z
           .array(z.string())
           .describe("Agents to notify, usually includes CEO"),

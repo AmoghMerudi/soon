@@ -127,7 +127,56 @@ export const getTicketDetails = query({
         .collect(),
     ]);
 
-    return { ticket, parent, subtickets, comments, artifacts, logs };
+    const dependencyTickets = ticket.dependsOn
+      ? await Promise.all(
+          ticket.dependsOn.map(async (depId) => {
+            const dep = await ctx.db.get(depId);
+            return dep ? { _id: dep._id, title: dep.title, status: dep.status } : null;
+          })
+        )
+      : [];
+
+    // Find tickets that depend on THIS ticket
+    const allProjectTickets = ticket.projectId
+      ? await ctx.db
+          .query("tickets")
+          .withIndex("by_project_status", (q) => q.eq("projectId", ticket.projectId!))
+          .collect()
+      : [];
+    const dependentTickets = allProjectTickets
+      .filter((t) => t.dependsOn?.includes(args.ticketId))
+      .map((t) => ({ _id: t._id, title: t.title, status: t.status }));
+
+    return { ticket, parent, subtickets, comments, artifacts, logs, dependencyTickets, dependentTickets };
+  },
+});
+
+export const getTicketDependencies = query({
+  args: { ticketId: v.id("tickets") },
+  handler: async (ctx, args) => {
+    const ticket = await ctx.db.get(args.ticketId);
+    if (!ticket) return { dependsOn: [], dependedOnBy: [] };
+
+    const dependsOn = ticket.dependsOn
+      ? (await Promise.all(
+          ticket.dependsOn.map(async (depId) => {
+            const dep = await ctx.db.get(depId);
+            return dep ? { _id: dep._id, title: dep.title, status: dep.status } : null;
+          })
+        )).filter(Boolean)
+      : [];
+
+    const allProjectTickets = ticket.projectId
+      ? await ctx.db
+          .query("tickets")
+          .withIndex("by_project_status", (q) => q.eq("projectId", ticket.projectId!))
+          .collect()
+      : [];
+    const dependedOnBy = allProjectTickets
+      .filter((t) => t.dependsOn?.includes(args.ticketId))
+      .map((t) => ({ _id: t._id, title: t.title, status: t.status }));
+
+    return { dependsOn, dependedOnBy };
   },
 });
 
@@ -155,5 +204,40 @@ export const getAgentLogsByTicket = query({
       .withIndex("by_ticket", (q) => q.eq("ticketId", args.ticketId))
       .order("asc")
       .collect();
+  },
+});
+
+export const getDeliverables = query({
+  args: { projectId: v.id("projects") },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("deliverables")
+      .withIndex("by_project", (q) => q.eq("projectId", args.projectId))
+      .order("desc")
+      .collect();
+  },
+});
+
+export const getDeliverable = query({
+  args: { deliverableId: v.id("deliverables") },
+  handler: async (ctx, args) => {
+    return await ctx.db.get(args.deliverableId);
+  },
+});
+
+export const getDeliverablesByTicket = query({
+  args: { ticketId: v.id("tickets") },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("deliverables")
+      .withIndex("by_ticket", (q) => q.eq("ticketId", args.ticketId))
+      .collect();
+  },
+});
+
+export const getAgentConfigs = query({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.db.query("agentConfig").collect();
   },
 });

@@ -45,10 +45,29 @@ function shortTicketId(id: string) {
   return id.slice(-8).toUpperCase();
 }
 
+const KNOWN_AGENT_IDS = new Set<string>([
+  "ceo",
+  "cto",
+  "cmo",
+  "developer",
+  "designer",
+  "marketing",
+]);
+
+function highlightMentions(content: string): string {
+  return content.replace(/(^|[^\w])@([\w-]+)/g, (full, lead, name: string) => {
+    if (KNOWN_AGENT_IDS.has(name.toLowerCase())) {
+      return `${lead}**@${name}**`;
+    }
+    return full;
+  });
+}
+
 type CommentActivityItem = {
   kind: "comment";
   author: string;
   content: string;
+  mentions?: string[];
   time: number;
 };
 
@@ -184,9 +203,45 @@ function ActivityEntry({ item }: { item: ActivityItem }) {
               }}
             >
               <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {item.content}
+                {highlightMentions(item.content)}
               </ReactMarkdown>
             </div>
+            {item.mentions && item.mentions.length > 0 && (
+              <div
+                className="flex items-center gap-1.5 flex-wrap mt-1.5"
+                style={{ paddingLeft: 2 }}
+              >
+                <span
+                  className="font-mono uppercase"
+                  style={{
+                    fontSize: 10,
+                    color: "#5E5C56",
+                    letterSpacing: "0.08em",
+                  }}
+                >
+                  Pinged
+                </span>
+                {item.mentions.map((m) => {
+                  const r = ROLES[(m.toLowerCase() as RoleKey)] ?? null;
+                  return (
+                    <span
+                      key={m}
+                      className="font-mono"
+                      style={{
+                        fontSize: 11,
+                        padding: "2px 7px",
+                        borderRadius: 999,
+                        border: `1px solid ${r?.color ?? "#3D3B36"}`,
+                        color: r?.color ?? "#BFBCB1",
+                        background: "transparent",
+                      }}
+                    >
+                      @{r?.label ?? m}
+                    </span>
+                  );
+                })}
+              </div>
+            )}
           </>
         ) : isStep ? (
           <div
@@ -472,7 +527,7 @@ function DispatchCard({
         </div>
       )}
 
-      {status === "failed" && assignee !== "ceo" && (
+      {(status === "failed" || status === "completed") && assignee !== "ceo" && (
         <button
           onClick={onRetry}
           disabled={retrying}
@@ -489,7 +544,11 @@ function DispatchCard({
             cursor: retrying ? "not-allowed" : "pointer",
           }}
         >
-          {retrying ? "RETRYING" : "RETRY DISPATCH"}
+          {retrying
+            ? "RETRYING"
+            : status === "failed"
+              ? "RETRY DISPATCH"
+              : "CONTINUE"}
         </button>
       )}
     </div>
@@ -507,11 +566,11 @@ export default function TicketDetailPage() {
 
   const ticket = useQuery(api.queries.getTicket, { ticketId: id });
   const comments = useQuery(api.queries.getTicketComments, { ticketId: id });
+  const ticketDeliverables = useQuery(api.queries.getDeliverablesByTicket, { ticketId: id });
   const logs = useQuery(api.queries.getAgentLogsByTicket, { ticketId: id });
-  const steps = useQuery(
-    api.agentSteps.getAgentStepsByRun,
-    ticket?.workflowRunId ? { workflowRunId: ticket.workflowRunId } : "skip"
-  );
+  const steps = useQuery(api.agentSteps.getAgentStepsByTicket, { ticketId: id });
+  const agentConfigs = useQuery(api.queries.getAgentConfigs);
+  const deps = useQuery(api.queries.getTicketDependencies, { ticketId: id });
   const addComment = useMutation(api.mutations.addComment);
   const retryDispatch = useMutation(api.mutations.retryDispatch);
 
@@ -519,6 +578,36 @@ export default function TicketDetailPage() {
   const [sending, setSending] = useState(false);
   const [retryingDispatch, setRetryingDispatch] = useState(false);
   const feedEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [mention, setMention] = useState<{
+    query: string;
+    start: number;
+    end: number;
+  } | null>(null);
+  const [mentionIdx, setMentionIdx] = useState(0);
+
+  const allAgents = useMemo(() => {
+    if (agentConfigs && agentConfigs.length > 0) {
+      return agentConfigs.map((a) => ({
+        agentId: a.agentId,
+        displayName: a.displayName,
+      }));
+    }
+    return Object.entries(ROLES)
+      .filter(([key]) => key !== "user")
+      .map(([key, role]) => ({ agentId: key, displayName: role.label }));
+  }, [agentConfigs]);
+
+  const filteredAgents = useMemo(() => {
+    const q = mention?.query.toLowerCase() ?? "";
+    return allAgents
+      .filter(
+        (a) =>
+          a.agentId.toLowerCase().startsWith(q) ||
+          a.displayName.toLowerCase().startsWith(q)
+      )
+      .slice(0, 8);
+  }, [allAgents, mention?.query]);
 
   const activity = useMemo(() => {
     const items: ActivityItem[] = [];
@@ -528,6 +617,7 @@ export default function TicketDetailPage() {
           kind: "comment",
           author: c.author,
           content: c.content,
+          mentions: c.mentions,
           time: c._creationTime,
         });
       }
@@ -566,13 +656,69 @@ export default function TicketDetailPage() {
     feedEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [activity.length]);
 
+  function detectMention(value: string, caret: number) {
+    const before = value.slice(0, caret);
+    const atIdx = before.lastIndexOf("@");
+    if (atIdx < 0) return null;
+    const between = before.slice(atIdx + 1);
+    if (!/^[\w-]*$/.test(between)) return null;
+    const prevChar = atIdx === 0 ? "" : value[atIdx - 1];
+    if (prevChar && !/\s/.test(prevChar)) return null;
+    return { query: between, start: atIdx, end: caret };
+  }
+
+  function handleTextChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
+    const value = e.target.value;
+    setCommentText(value);
+    const caret = e.target.selectionStart ?? value.length;
+    const next = detectMention(value, caret);
+    if (next) {
+      setMention(next);
+      setMentionIdx(0);
+    } else {
+      setMention(null);
+    }
+  }
+
+  function selectMention(agentId: string) {
+    if (!mention) return;
+    const before = commentText.slice(0, mention.start);
+    const after = commentText.slice(mention.end);
+    const inserted = `@${agentId} `;
+    const next = before + inserted + after;
+    setCommentText(next);
+    setMention(null);
+    const caretPos = before.length + inserted.length;
+    requestAnimationFrame(() => {
+      const ta = textareaRef.current;
+      if (ta) {
+        ta.focus();
+        ta.setSelectionRange(caretPos, caretPos);
+      }
+    });
+  }
+
+  function extractMentions(text: string): string[] {
+    const valid = new Set(allAgents.map((a) => a.agentId.toLowerCase()));
+    const found = new Set<string>();
+    const re = /(?:^|[^\w])@([\w-]+)/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(text)) !== null) {
+      const idLower = m[1].toLowerCase();
+      if (valid.has(idLower)) found.add(idLower);
+    }
+    return Array.from(found);
+  }
+
   async function handleSend() {
     const text = commentText.trim();
     if (!text || sending) return;
     setSending(true);
     try {
-      await addComment({ ticketId: id, author: "user", content: text });
+      const mentions = extractMentions(text);
+      await addComment({ ticketId: id, author: "user", content: text, mentions });
       setCommentText("");
+      setMention(null);
     } finally {
       setSending(false);
     }
@@ -758,62 +904,165 @@ export default function TicketDetailPage() {
             borderTop: "1px solid #26241F",
           }}
         >
-          <div
-            className="flex items-end gap-2"
-            style={{
-              background: "#1A1815",
-              border: "1px solid #26241F",
-              borderRadius: 10,
-              padding: "4px 4px 4px 14px",
-            }}
-          >
-            <textarea
-              value={commentText}
-              onChange={(e) => setCommentText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSend();
-                }
-              }}
-              placeholder="Leave a comment..."
-              rows={1}
-              className="flex-1 resize-none font-sans"
+          <div className="relative">
+            {mention && filteredAgents.length > 0 && (
+              <div
+                className="absolute z-10"
+                style={{
+                  bottom: "calc(100% + 6px)",
+                  left: 0,
+                  minWidth: 240,
+                  background: "#141310",
+                  border: "1px solid #26241F",
+                  borderRadius: 10,
+                  padding: 4,
+                  boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+                }}
+                onMouseDown={(e) => e.preventDefault()}
+              >
+                <div
+                  className="font-mono uppercase"
+                  style={{
+                    fontSize: 10,
+                    color: "#5E5C56",
+                    letterSpacing: "0.1em",
+                    padding: "6px 10px 4px",
+                  }}
+                >
+                  Tag an agent
+                </div>
+                {filteredAgents.map((a, i) => {
+                  const r = ROLES[a.agentId.toLowerCase() as RoleKey];
+                  const active = i === mentionIdx;
+                  return (
+                    <button
+                      key={a.agentId}
+                      type="button"
+                      onClick={() => selectMention(a.agentId)}
+                      onMouseEnter={() => setMentionIdx(i)}
+                      className="w-full text-left flex items-center gap-2 cursor-pointer"
+                      style={{
+                        background: active ? "#1A1815" : "transparent",
+                        border: "none",
+                        borderRadius: 8,
+                        padding: "8px 10px",
+                      }}
+                    >
+                      <span
+                        className="rounded-full inline-flex items-center justify-center font-mono"
+                        style={{
+                          width: 20,
+                          height: 20,
+                          background: r?.color ?? "#3D3B36",
+                          color: r?.fg ?? "#FAFAF7",
+                          fontSize: 11,
+                          fontWeight: 600,
+                        }}
+                      >
+                        {r?.initial ?? a.agentId[0]?.toUpperCase()}
+                      </span>
+                      <span
+                        className="font-sans"
+                        style={{ fontSize: 13, color: "#FAFAF7" }}
+                      >
+                        {a.displayName}
+                      </span>
+                      <span
+                        className="font-mono ml-auto"
+                        style={{ fontSize: 11, color: "#5E5C56" }}
+                      >
+                        @{a.agentId}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            <div
+              className="flex items-end gap-2"
               style={{
-                background: "transparent",
-                border: "none",
-                outline: "none",
-                color: "#FAFAF7",
-                fontSize: 14,
-                lineHeight: 1.5,
-                padding: "8px 0",
-                minHeight: 36,
-                maxHeight: 120,
-              }}
-            />
-            <button
-              onClick={handleSend}
-              disabled={!commentText.trim() || sending}
-              className="shrink-0 cursor-pointer"
-              style={{
-                width: 32,
-                height: 32,
-                borderRadius: 8,
-                border: "none",
-                background:
-                  commentText.trim() && !sending ? "#F2C744" : "#26241F",
-                color: commentText.trim() && !sending ? "#1A1404" : "#5E5C56",
-                fontSize: 14,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                cursor:
-                  !commentText.trim() || sending ? "not-allowed" : "pointer",
-                transition: "background 120ms",
+                background: "#1A1815",
+                border: "1px solid #26241F",
+                borderRadius: 10,
+                padding: "4px 4px 4px 14px",
               }}
             >
-              ↑
-            </button>
+              <textarea
+                ref={textareaRef}
+                value={commentText}
+                onChange={handleTextChange}
+                onKeyDown={(e) => {
+                  if (mention && filteredAgents.length > 0) {
+                    if (e.key === "ArrowDown") {
+                      e.preventDefault();
+                      setMentionIdx((i) => (i + 1) % filteredAgents.length);
+                      return;
+                    }
+                    if (e.key === "ArrowUp") {
+                      e.preventDefault();
+                      setMentionIdx(
+                        (i) =>
+                          (i - 1 + filteredAgents.length) % filteredAgents.length
+                      );
+                      return;
+                    }
+                    if (e.key === "Enter" || e.key === "Tab") {
+                      e.preventDefault();
+                      const choice = filteredAgents[mentionIdx];
+                      if (choice) selectMention(choice.agentId);
+                      return;
+                    }
+                    if (e.key === "Escape") {
+                      e.preventDefault();
+                      setMention(null);
+                      return;
+                    }
+                  }
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSend();
+                  }
+                }}
+                onBlur={() => setMention(null)}
+                placeholder="Leave a comment... use @ to tag an agent"
+                rows={1}
+                className="flex-1 resize-none font-sans"
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  outline: "none",
+                  color: "#FAFAF7",
+                  fontSize: 14,
+                  lineHeight: 1.5,
+                  padding: "8px 0",
+                  minHeight: 36,
+                  maxHeight: 120,
+                }}
+              />
+              <button
+                onClick={handleSend}
+                disabled={!commentText.trim() || sending}
+                className="shrink-0 cursor-pointer"
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 8,
+                  border: "none",
+                  background:
+                    commentText.trim() && !sending ? "#F2C744" : "#26241F",
+                  color: commentText.trim() && !sending ? "#1A1404" : "#5E5C56",
+                  fontSize: 14,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor:
+                    !commentText.trim() || sending ? "not-allowed" : "pointer",
+                  transition: "background 120ms",
+                }}
+              >
+                ↑
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -949,6 +1198,130 @@ export default function TicketDetailPage() {
             })}
           </span>
         </PropertyRow>
+
+        {deps && deps.dependsOn.length > 0 && (
+          <div style={{ marginTop: 16, borderTop: "1px solid #26241F", paddingTop: 14 }}>
+            <div
+              className="font-sans font-semibold"
+              style={{ fontSize: 13, color: "#8E8B82", marginBottom: 8 }}
+            >
+              Depends On
+            </div>
+            <div className="flex flex-col gap-1.5">
+              {deps.dependsOn.map((d) => {
+                if (!d) return null;
+                const resolved = d.status === "resolved";
+                return (
+                  <a
+                    key={d._id}
+                    href={`/projects/${projectId}/tickets/${d._id}`}
+                    className="flex items-center gap-2"
+                    style={{
+                      background: "#141310",
+                      border: `1px solid ${resolved ? "#244631" : "#5A4A15"}`,
+                      borderRadius: 8,
+                      padding: "6px 10px",
+                      textDecoration: "none",
+                    }}
+                  >
+                    <span style={{ fontSize: 12, color: resolved ? "#7FCFA0" : "#F2C744" }}>
+                      {resolved ? "✓" : "○"}
+                    </span>
+                    <span
+                      className="font-sans truncate"
+                      style={{ fontSize: 12, color: "#FAFAF7", flex: 1 }}
+                    >
+                      {d.title}
+                    </span>
+                  </a>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {deps && deps.dependedOnBy.length > 0 && (
+          <div style={{ marginTop: 16, borderTop: "1px solid #26241F", paddingTop: 14 }}>
+            <div
+              className="font-sans font-semibold"
+              style={{ fontSize: 13, color: "#8E8B82", marginBottom: 8 }}
+            >
+              Blocking
+            </div>
+            <div className="flex flex-col gap-1.5">
+              {deps.dependedOnBy.map((d) => (
+                <a
+                  key={d._id}
+                  href={`/projects/${projectId}/tickets/${d._id}`}
+                  className="flex items-center gap-2"
+                  style={{
+                    background: "#141310",
+                    border: "1px solid #26241F",
+                    borderRadius: 8,
+                    padding: "6px 10px",
+                    textDecoration: "none",
+                  }}
+                >
+                  <span style={{ fontSize: 12, color: "#F0A097" }}>⏳</span>
+                  <span
+                    className="font-sans truncate"
+                    style={{ fontSize: 12, color: "#FAFAF7", flex: 1 }}
+                  >
+                    {d.title}
+                  </span>
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {ticketDeliverables && ticketDeliverables.length > 0 && (
+          <div style={{ marginTop: 16, borderTop: "1px solid #26241F", paddingTop: 14 }}>
+            <div
+              className="font-sans font-semibold"
+              style={{ fontSize: 13, color: "#8E8B82", marginBottom: 8 }}
+            >
+              Deliverables
+            </div>
+            <div className="flex flex-col gap-2">
+              {ticketDeliverables.map((d) => (
+                <a
+                  key={d._id}
+                  href={`/projects/${projectId}/repository`}
+                  className="block"
+                  style={{
+                    background: "#141310",
+                    border: "1px solid #26241F",
+                    borderRadius: 8,
+                    padding: "8px 10px",
+                    textDecoration: "none",
+                  }}
+                >
+                  <div
+                    className="font-sans font-medium"
+                    style={{ fontSize: 12, color: "#FAFAF7", lineHeight: 1.3 }}
+                  >
+                    {d.title}
+                  </div>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span
+                      className="font-mono uppercase"
+                      style={{ fontSize: 10, color: "#F2C744", letterSpacing: "0.06em" }}
+                    >
+                      {d.category}
+                    </span>
+                    <span
+                      className="font-mono"
+                      style={{ fontSize: 10, color: "#5E5C56" }}
+                    >
+                      by {d.createdBy}
+                    </span>
+                  </div>
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

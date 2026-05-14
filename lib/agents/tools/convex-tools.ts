@@ -12,7 +12,7 @@ async function createTicketStep(input: {
   description: string;
   priority: "critical" | "high" | "medium" | "low";
   tags: string[];
-  assignee: string | null;
+  assignee: string;
   taggedAgents: string[];
   agentName: string;
   parentTicket?: string;
@@ -124,7 +124,7 @@ export const convexTools = {
       description: z.string(),
       priority: z.enum(["critical", "high", "medium", "low"]),
       tags: z.array(z.string()),
-      assignee: z.nullable(z.string()),
+      assignee: z.string().describe("REQUIRED agent role to assign"),
       taggedAgents: z.array(z.string()),
       agentName: z.string(),
       parentTicket: z.optional(z.string()),
