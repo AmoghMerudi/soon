@@ -20,6 +20,7 @@ interface Ticket {
   tags: string[];
   createdBy: string;
   taggedAgents: string[];
+  dispatchStatus?: "pending" | "running" | "completed" | "failed";
 }
 
 const AGENT_ROLES = ["ceo", "cto", "cmo", "developer", "designer", "marketing"] as const;
@@ -220,22 +221,48 @@ function InjectModal({ onClose }: { onClose: () => void }) {
 function TicketCard({ ticket, onClick }: { ticket: Ticket; onClick: (t: Ticket) => void }) {
   const roleKey = (ticket.assignee?.toLowerCase() ?? "ceo") as RoleKey;
   const role = ROLES[roleKey] ?? ROLES.ceo;
+  const isLive = ticket.dispatchStatus === "running";
   return (
     <div
       onClick={() => onClick(ticket)}
       className="cursor-pointer"
       style={{
         background: "#1A1815",
-        border: "1px solid #26241F",
+        border: `1px solid ${isLive ? "#3D3B36" : "#26241F"}`,
         borderLeft: `3px solid ${role.color}`,
         padding: "10px 12px",
         borderRadius: 8,
         transition: "box-shadow 160ms",
+        boxShadow: isLive ? "0 0 0 1px rgba(242,199,68,0.18)" : undefined,
       }}
     >
-      <div className="flex justify-between items-baseline mb-1.5">
-        <span className="font-mono text-sm" style={{ color: "#8E8B82" }}>
-          {ticket._id.slice(-8).toUpperCase()}
+      <div className="flex justify-between items-baseline mb-1.5 gap-2">
+        <span className="inline-flex items-center gap-2 min-w-0">
+          <span className="font-mono text-sm" style={{ color: "#8E8B82" }}>
+            {ticket._id.slice(-8).toUpperCase()}
+          </span>
+          {isLive && (
+            <span
+              className="inline-flex items-center gap-1 font-mono uppercase shrink-0"
+              style={{
+                fontSize: 10,
+                color: "#F2C744",
+                letterSpacing: "0.14em",
+                background: "rgba(242,199,68,0.10)",
+                border: "1px solid rgba(242,199,68,0.35)",
+                padding: "1px 6px",
+                borderRadius: 999,
+                lineHeight: 1.4,
+              }}
+              title="Agent is actively running this ticket"
+            >
+              <span
+                className="pulse rounded-full"
+                style={{ width: 5, height: 5, background: "#F2C744" }}
+              />
+              Live
+            </span>
+          )}
         </span>
         <PriorityTag priority={ticket.priority} />
       </div>

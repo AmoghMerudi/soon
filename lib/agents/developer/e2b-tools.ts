@@ -6,6 +6,7 @@ import type { Id } from "@/convex/_generated/dataModel";
 let _sandboxId: string | null = null;
 let _bootstrapped = false;
 let _ticketId: string | null = null;
+let _acquiringPromise: Promise<any> | null = null;
 
 const convex = new ConvexHttpClient(process.env.NEXT_PUBLIC_CONVEX_URL!);
 
@@ -123,7 +124,7 @@ async function tryConnect(Sandbox: any, sandboxId: string): Promise<any | null> 
   return null;
 }
 
-async function getOrCreateSandbox() {
+async function _doGetOrCreateSandbox() {
   const Sandbox = await getSandboxClass();
 
   if (_sandboxId) {
@@ -155,6 +156,18 @@ async function getOrCreateSandbox() {
   return sandbox;
 }
 
+// Deduplicates concurrent calls so parallel tool invocations share one sandbox.
+async function getOrCreateSandbox() {
+  if (_acquiringPromise) return _acquiringPromise;
+
+  _acquiringPromise = _doGetOrCreateSandbox();
+  try {
+    return await _acquiringPromise;
+  } finally {
+    _acquiringPromise = null;
+  }
+}
+
 const BLOCKED_SHELL_PATTERNS = [
   /git\s+push\s+(?:origin\s+)?(?:main|master)\b/,
   /git\s+push\s+--force\b(?!-with-lease)/,
@@ -184,6 +197,7 @@ function isSandboxCrash(err: unknown): boolean {
 }
 
 async function resetSandbox() {
+  _acquiringPromise = null;
   if (_sandboxId) {
     try {
       const Sandbox = await getSandboxClass();
