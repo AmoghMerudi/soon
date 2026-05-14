@@ -1,5 +1,6 @@
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
 import { z } from "zod";
 import { getSkillContent } from "./skills";
 import { exaSearchDurableTool } from "../exa-tools";
@@ -18,14 +19,29 @@ async function getTicketDetailsStep(input: { ticketId: string }) {
   return details;
 }
 
+async function addDependencyStep(input: {
+  ticketId: string;
+  dependsOnTicketId: string;
+}) {
+  "use step";
+
+  await convex.mutation(api.mutations.addDependency, {
+    ticketId: input.ticketId as any,
+    dependsOnTicketId: input.dependsOnTicketId as any,
+  });
+
+  return { ok: true };
+}
+
 async function createSubTicketStep(input: {
   parentTicketId: string;
   title: string;
   description: string;
   priority: "critical" | "high" | "medium" | "low";
   tags: string[];
-  assignee: string | null;
+  assignee: string;
   taggedAgents: string[];
+  dependsOn?: string[];
 }) {
   "use step";
 
@@ -39,6 +55,7 @@ async function createSubTicketStep(input: {
     createdBy: "CTO",
     taggedAgents: input.taggedAgents,
     parentTicket: input.parentTicketId as any,
+    dependsOn: input.dependsOn?.map(id => id as any),
   });
 
   await convex.mutation(api.mutations.logAgentAction, {
@@ -53,7 +70,7 @@ async function createSubTicketStep(input: {
 
 async function assignTicketStep(input: {
   ticketId: string;
-  assignee: string | null;
+  assignee: string;
 }) {
   "use step";
 
@@ -160,12 +177,127 @@ async function getTicketsByTagStep(input: { tag: string }) {
   }));
 }
 
+async function saveDeliverableStep(input: {
+  ticketId?: string;
+  title: string;
+  body: string;
+  category: "plan" | "analysis" | "report" | "strategy" | "brief" | "spec" | "other";
+}) {
+  "use step";
+
+  let projectId: string | undefined;
+  if (input.ticketId) {
+    let current = await convex.query(api.queries.getTicket, {
+      ticketId: input.ticketId as any,
+    });
+    while (current && !current.projectId && current.parentTicket) {
+      current = await convex.query(api.queries.getTicket, {
+        ticketId: current.parentTicket,
+      });
+    }
+    projectId = current?.projectId as string | undefined;
+  }
+  if (!projectId) return { error: "Cannot determine project — provide a ticketId" };
+
+  const id = await convex.mutation(api.mutations.createDeliverable, {
+    projectId: projectId as any,
+    ticketId: (input.ticketId || undefined) as any,
+    title: input.title,
+    body: input.body,
+    category: input.category,
+    createdBy: "CTO",
+  });
+
+  return { deliverableId: id.toString(), title: input.title };
+}
+
 async function loadSkillStep(input: { name: string }) {
   "use step";
 
   const content = getSkillContent(input.name);
   if (!content) return { error: `Skill "${input.name}" not found` };
   return { name: input.name, instructions: content };
+}
+
+async function getProjectContextStep(input: { ticketId: string }) {
+  "use step";
+
+  const ticket = await convex.query(api.queries.getTicket, {
+    ticketId: input.ticketId as Id<"tickets">,
+  });
+  if (!ticket?.projectId) {
+    return { error: "Ticket has no associated project" };
+  }
+  const project = await convex.query(api.queries.getProject, {
+    projectId: ticket.projectId,
+  });
+  return {
+    projectId: ticket.projectId,
+    projectName: project?.name ?? null,
+    githubRepo: project?.githubRepo ?? null,
+    githubOwner: project?.githubOwner ?? null,
+    vercelProjectId: project?.vercelProjectId ?? null,
+  };
+}
+
+async function createGithubRepoStep(input: {
+  ticketId: string;
+  repoName: string;
+  isPrivate?: boolean;
+  description?: string;
+}) {
+  "use step";
+
+  const pat = process.env.AGENT_GITHUB_PAT;
+  if (!pat) {
+    return { error: "AGENT_GITHUB_PAT not configured — cannot create repo" };
+  }
+
+  const res = await fetch("https://api.github.com/user/repos", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${pat}`,
+      Accept: "application/vnd.github+json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      name: input.repoName,
+      private: input.isPrivate ?? true,
+      description: input.description ?? "",
+      auto_init: true,
+    }),
+  });
+
+  if (!res.ok) {
+    const body = await res.text();
+    return { error: `GitHub API error ${res.status}: ${body}` };
+  }
+
+  const repo = (await res.json()) as { full_name: string; html_url: string; owner: { login: string } };
+
+  const ticket = await convex.query(api.queries.getTicket, {
+    ticketId: input.ticketId as Id<"tickets">,
+  });
+  if (ticket?.projectId) {
+    await convex.mutation(api.mutations.updateProject, {
+      projectId: ticket.projectId,
+      githubRepo: repo.full_name,
+      githubOwner: repo.owner.login,
+    });
+  }
+
+  await convex.mutation(api.mutations.logAgentAction, {
+    agent: "CTO",
+    action: "create_github_repo",
+    details: `Created GitHub repo: ${repo.full_name}`,
+    ticketId: input.ticketId as Id<"tickets">,
+  });
+
+  return {
+    repoFullName: repo.full_name,
+    repoUrl: repo.html_url,
+    owner: repo.owner.login,
+  };
 }
 
 // --- Tool definitions for DurableAgent ---
@@ -192,13 +324,27 @@ export const ctoTools = {
       priority: z.enum(["critical", "high", "medium", "low"]),
       tags: z.array(z.string()).describe("Domain tags inherited from parent"),
       assignee: z
-        .nullable(z.string())
-        .describe("Use 'Developer' for implementation tasks"),
+        .string()
+        .describe("REQUIRED. Use 'Developer' for implementation tasks. Every ticket must have an assignee."),
       taggedAgents: z
         .array(z.string())
         .describe("Agents to notify — always include CTO"),
+      dependsOn: z
+        .array(z.string())
+        .optional()
+        .describe("Ticket IDs that must resolve before this ticket dispatches. Use for ordering."),
     }),
     execute: createSubTicketStep,
+  },
+
+  addDependency: {
+    description:
+      "Make one ticket depend on another. The dependent ticket will NOT be dispatched until the dependency is resolved. Use this to enforce ordering when creating multiple Developer sub-tickets — e.g., 'set up app foundation' must finish before 'implement features'. CRITICAL: when you create multiple Developer tickets that share a repo, ALWAYS make later tickets depend on the first one.",
+    inputSchema: z.object({
+      ticketId: z.string().describe("The ticket that should wait"),
+      dependsOnTicketId: z.string().describe("The ticket that must be resolved first"),
+    }),
+    execute: addDependencyStep,
   },
 
   assignTicket: {
@@ -285,6 +431,49 @@ export const ctoTools = {
       name: z.string().describe("Skill name from the available skills list"),
     }),
     execute: loadSkillStep,
+  },
+
+  saveDeliverable: {
+    description:
+      "Save a deliverable to the repository — architecture docs, technical specs, risk analyses, review reports. Persists beyond ticket comments for long-term reference.",
+    inputSchema: z.object({
+      ticketId: z.string().optional().describe("Related ticket ID if applicable"),
+      title: z.string().describe("Clear title for the deliverable"),
+      body: z.string().describe("Full content in markdown"),
+      category: z
+        .enum(["plan", "analysis", "report", "strategy", "brief", "spec", "other"])
+        .describe("Type of deliverable"),
+    }),
+    execute: saveDeliverableStep,
+  },
+
+  getProjectContext: {
+    description:
+      "Check whether the project already has a GitHub repo and Vercel project configured. Call this BEFORE creating developer sub-tickets to decide if you need to create a repo first.",
+    inputSchema: z.object({
+      ticketId: z.string().describe("Any ticket ID belonging to the project"),
+    }),
+    execute: getProjectContextStep,
+  },
+
+  createGithubRepo: {
+    description:
+      "Create a new GitHub repository via the bot account and store it on the project record. MUST be called before creating Developer sub-tickets if the project has no repo yet. Developer agents cannot create repos — they will mark blocked if none exists.",
+    inputSchema: z.object({
+      ticketId: z.string().describe("Ticket ID (used to find the project)"),
+      repoName: z
+        .string()
+        .describe("Repository slug (lowercase, hyphens, e.g. 'my-saas-app')"),
+      isPrivate: z
+        .boolean()
+        .optional()
+        .describe("Default true — create a private repo"),
+      description: z
+        .string()
+        .optional()
+        .describe("Short repo description"),
+    }),
+    execute: createGithubRepoStep,
   },
 
   exaSearch: exaSearchDurableTool,

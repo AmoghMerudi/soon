@@ -1,16 +1,12 @@
 import { DurableAgent } from "@workflow/ai/agent";
 import { openai } from "@workflow/ai/openai";
 import { getWritable } from "workflow";
-import { stepCountIs, jsonSchema } from "ai";
+import { stepCountIs } from "ai";
 import type { ModelMessage, UIMessageChunk, ToolSet } from "ai";
 import { z } from "zod";
 import { buildCeoTools } from "./tools";
 import { buildSkillsPrompt } from "./skills";
-import {
-  getComposioSessionToolSchemas,
-  executeComposioSessionTool,
-  type ComposioToolSchema,
-} from "../composio-client";
+import { getComposioDurableTools } from "../composio-durable-tools";
 import {
   recallMemories,
   saveMemory,
@@ -36,9 +32,16 @@ You delegate to CTO and CMO — never directly to execution agents (Developer, D
 - Design/marketing work → assign to "CMO"
 - Strategy tickets → leave unassigned
 
+## Composio Integrations
+You have access to Composio's Tool Router via MCP. It exposes meta-tools that let you discover and execute any integration (GitHub, Slack, Linear, Google Sheets, Google Docs, and more).
+- To find a tool: call the search tool with a clear natural-language \`query\` (e.g. "create a github repository", "list slack channels").
+- To execute a tool: use the multi-execute tool with the slug returned from search and the required arguments.
+- Never list tool names from memory — always go through search so the answer reflects what's actually available.
+- If a toolkit isn't connected yet, the manage-connections tool returns an authorization link — show it to the user.
+
 ## GitHub Repository (Critical — Do This First)
 Before creating any engineering tickets, ensure the project has a GitHub repo:
-1. Use GITHUB_CREATE_REPO to create a new repo (set private: true, auto_init: true).
+1. Search Composio for a "create github repo" tool, then execute it (private: true, auto_init: true).
 2. Immediately call storeGithubRepo with the returned URL, repo name, and owner.
 3. Include the repo URL in all engineering ticket descriptions so the Developer agent can clone it.
 If the project already has a repo stored (visible in prior context), skip creation.
@@ -74,6 +77,11 @@ If the project already has a repo stored (visible in prior context), skip creati
 - Use recall_memory when you need prior context (preferences, past decisions, recurring patterns).
 - Use save_memory to persist concise facts the user has confirmed (preferences, naming conventions, decisions). Don't save ephemeral chatter.
 
+## Deliverables
+- Always save significant outputs to the repository using saveDeliverable — business plans, market analyses, strategy documents, phased roadmaps.
+- Save the plan BEFORE creating tickets, so the deliverable can be referenced later.
+- Use category "plan" for roadmaps/phased plans, "analysis" for market research, "strategy" for positioning/go-to-market.
+
 ## Constraints:
 - Never create more than 10 tickets per interaction.
 - Never do implementation work — only plan, delegate, review.
@@ -82,61 +90,6 @@ If the project already has a repo stored (visible in prior context), skip creati
 - Use askQuestion to present structured choices — never ask open-ended questions when concrete options exist.`;
 
 const CEO_AGENT_ID = "ceo";
-const CEO_COMPOSIO_TOOLKITS = ["slack", "googlesheets", "googledocs", "linear", "github"];
-
-// Returns only serializable schema data — never functions, which can't cross the step boundary.
-async function getComposioToolSchemas(userId: string) {
-  "use step";
-
-  try {
-    const schemas = await getComposioSessionToolSchemas({
-      userId,
-      toolkits: CEO_COMPOSIO_TOOLKITS,
-    });
-    return { schemas, error: null };
-  } catch (e) {
-    return { schemas: null, error: String(e) };
-  }
-}
-
-async function runComposioTool(input: {
-  userId: string;
-  toolSlug: string;
-  arguments: Record<string, unknown>;
-}) {
-  "use step";
-
-  return executeComposioSessionTool({
-    userId: input.userId,
-    toolkits: CEO_COMPOSIO_TOOLKITS,
-    toolSlug: input.toolSlug,
-    arguments: input.arguments,
-  });
-}
-
-function buildComposioTools(userId: string, schemas: ComposioToolSchema[]): ToolSet {
-  const tools: ToolSet = {} as ToolSet;
-  for (const schema of schemas) {
-    const slug = schema.slug;
-    // Use the real Composio parameter schema, but ensure `properties` is always
-    // present — OpenAI rejects object schemas that omit it entirely.
-    const rawParams = (schema.inputParameters ?? {}) as Record<string, unknown>;
-    const safeSchema: Record<string, unknown> = {
-      type: "object",
-      properties: {},
-      ...rawParams,
-    };
-    if (!safeSchema.properties) safeSchema.properties = {};
-
-    tools[slug] = {
-      description: schema.description ?? slug,
-      inputSchema: jsonSchema(safeSchema),
-      execute: (args: Record<string, unknown>) =>
-        runComposioTool({ userId, toolSlug: slug, arguments: args }),
-    };
-  }
-  return tools;
-}
 
 async function recallStep(projectId: string, query: string) {
   "use step";
@@ -218,13 +171,15 @@ export async function ceoChatWorkflow(
 
   const recalledBlock = await recallStep(projectId, lastUserText || "current work");
 
-  const composioResult = await getComposioToolSchemas(`ceo-${projectId}`);
+  const composioResult = await getComposioDurableTools({
+    userId: `ceo-${projectId}`,
+  });
+
   const baseTools = buildCeoTools(projectId as Id<"projects">);
   const memTools = ceoMemoryTools(projectId);
-  const composioTools = composioResult.schemas
-    ? buildComposioTools(`ceo-${projectId}`, composioResult.schemas)
-    : {};
-  const allTools = { ...baseTools, ...composioTools, ...memTools };
+  const allTools = composioResult.tools
+    ? { ...baseTools, ...composioResult.tools, ...memTools }
+    : { ...baseTools, ...memTools };
 
   const agent = new DurableAgent({
     model: openai("gpt-5.4"),
@@ -234,9 +189,13 @@ export async function ceoChatWorkflow(
 
   const writable = getWritable<UIMessageChunk>();
 
-  await agent.stream({
-    messages,
-    writable,
-    stopWhen: stepCountIs(20),
-  });
+  try {
+    await agent.stream({
+      messages,
+      writable,
+      stopWhen: stepCountIs(20),
+    });
+  } finally {
+    await composioResult.close();
+  }
 }
