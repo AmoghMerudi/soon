@@ -145,39 +145,9 @@ export function AgentDesk({
         <AgentCharacter role={role} pose={pose} rotY={Math.PI} />
       </group>
 
-      {/* Tool badge (live activity) above the agent */}
+      {/* Tool badge (live activity) above the agent. The current ticket title
+          lives on the per-room wall board now (see RoomWorkBoard.tsx). */}
       <BadgeFor live={live} />
-
-      {/* Thought bubble with current ticket title */}
-      {live?.currentTicketTitle && (
-        <Html
-          position={[0, 3.0, agentBackZ]}
-          center
-          style={{ pointerEvents: "none" }}
-        >
-          <div
-            className="font-mono"
-            style={{
-              padding: "6px 10px",
-              background: "#1A1815ee",
-              border: `1px solid ${meta.color}`,
-              borderRadius: 4,
-              color: "#FAFAF7",
-              fontSize: 10,
-              letterSpacing: "0.04em",
-              maxWidth: 220,
-              lineHeight: 1.3,
-              textAlign: "center",
-              boxShadow: `0 0 12px ${meta.color}33`,
-            }}
-          >
-            <div style={{ color: meta.color, fontSize: 8, letterSpacing: "0.16em", marginBottom: 2 }}>
-              {meta.label.toUpperCase()}
-            </div>
-            {truncate(live.currentTicketTitle, 60)}
-          </div>
-        </Html>
-      )}
 
       {/* Role label at desk front */}
       <Html
@@ -208,7 +178,7 @@ function BadgeFor({ live }: { live: AgentLiveState | null }) {
   if (live.activeStep) {
     return (
       <ToolBadge
-        position={[0, 3.7, 0.85]}
+        position={[0, 2.6, 0.85]}
         kind="active"
         toolName={live.activeStep.toolName}
         startedAt={live.activeStep.startedAt}
@@ -216,12 +186,12 @@ function BadgeFor({ live }: { live: AgentLiveState | null }) {
     );
   }
   if (live.isThinking) {
-    return <ToolBadge position={[0, 3.7, 0.85]} kind="thinking" />;
+    return <ToolBadge position={[0, 2.6, 0.85]} kind="thinking" />;
   }
   if (live.lastStep) {
     return (
       <ToolBadge
-        position={[0, 3.7, 0.85]}
+        position={[0, 2.6, 0.85]}
         kind="last"
         toolName={live.lastStep.toolName}
         durationMs={live.lastStep.durationMs}
@@ -230,15 +200,11 @@ function BadgeFor({ live }: { live: AgentLiveState | null }) {
     );
   }
   if (live.state === "blocked") {
-    return <ToolBadge position={[0, 3.7, 0.85]} kind="idle" label="blocked" />;
+    return <ToolBadge position={[0, 2.6, 0.85]} kind="idle" label="blocked" />;
   }
-  return <ToolBadge position={[0, 3.7, 0.85]} kind="idle" />;
+  return <ToolBadge position={[0, 2.6, 0.85]} kind="idle" />;
 }
 
 function lerp(a: number, b: number, t: number) {
   return a + (b - a) * t;
-}
-
-function truncate(s: string, n: number) {
-  return s.length > n ? s.slice(0, n - 1) + "…" : s;
 }

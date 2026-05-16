@@ -18,8 +18,8 @@ const COLUMN_ORDER: StatusKey[] = [
   "resolved",
 ];
 
-const COL_W = 1.1;
-const COL_GAP = 0.2;
+const COL_W = 1.6;
+const COL_GAP = 0.5;
 const CUBE_SIZE = 0.5;
 const CUBE_GAP = 0.08;
 const MAX_PER_COL = 6;

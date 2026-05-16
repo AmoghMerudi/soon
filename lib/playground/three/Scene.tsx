@@ -11,6 +11,7 @@ import { Office } from "./Office";
 import { Agents } from "./Agents";
 import { Player } from "./Player";
 import { TicketBoard } from "./TicketBoard";
+import { RoomWorkBoards } from "./RoomWorkBoard";
 import { MessageProjectiles } from "./MessageProjectile";
 import { PLAYER_SPAWN, CAMERA_POSITION, CAMERA_ZOOM } from "./layout";
 import { useAgentLiveStates, type PlaygroundRole } from "./useAgentState";
@@ -126,6 +127,7 @@ export function PlaygroundScene({ projectId }: { projectId: string }) {
 
         <Office />
         <TicketBoard projectId={projectConvexId} />
+        <RoomWorkBoards states={states} />
         <Agents states={states} highlightedRole={closestRole} />
         <Player
           positionRef={playerPosRef}

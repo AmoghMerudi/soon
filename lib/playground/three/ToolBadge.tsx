@@ -26,15 +26,15 @@ export function ToolBadge(props: Props & { position: [number, number, number] })
       <div
         className="font-mono"
         style={{
-          padding: "4px 8px",
+          padding: "3px 6px",
           background: "#0F0E0Cdd",
           border: "1px solid #3D3B36",
           borderRadius: 3,
           color: "#FAFAF7",
-          fontSize: 9,
-          letterSpacing: "0.06em",
+          fontSize: 8,
+          letterSpacing: "0.04em",
           whiteSpace: "nowrap",
-          minWidth: 80,
+          minWidth: 60,
           textAlign: "center",
           backdropFilter: "blur(2px)",
         }}

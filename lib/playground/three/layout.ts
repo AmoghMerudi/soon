@@ -154,9 +154,29 @@ export const DESKS: Record<Exclude<RoleKey, "user">, DeskAnchor> = {
 };
 
 // Kanban board sits on the boardroom long table (boardroom rear).
+// Anchor shifts slightly west so the wider board still fits inside the boardroom.
 export const KANBAN_ANCHOR = {
-  x: X_MIN + 11,
+  x: X_MIN + 9,
   z: RECEP_Z + 4.5,
+};
+
+// Which roles live in which room — drives the per-room wall work boards.
+export const ROOM_AGENTS: Partial<Record<RoomKey, Exclude<RoleKey, "user">[]>> = {
+  boardroom: ["ceo"],
+  engineering: ["cto", "developer"],
+  design: ["designer"],
+  marketing: ["cmo", "marketing"],
+};
+
+// Wall-mounted "now working" board per room. Position is on a side wall
+// so the board faces into the room and is visible to the SE-facing camera.
+export const ROOM_BOARD_ANCHORS: Partial<
+  Record<RoomKey, { x: number; y: number; z: number; rotY: number }>
+> = {
+  boardroom:   { x: MID_C1 - 0.3, y: 1.9, z: RECEP_Z + 3.5, rotY: -Math.PI / 2 },
+  engineering: { x: X_MAX - 0.6,  y: 1.9, z: RECEP_Z + 4.5, rotY: -Math.PI / 2 },
+  design:      { x: X_MIN + 0.6,  y: 1.9, z: HALL_Z + 6,    rotY:  Math.PI / 2 },
+  marketing:   { x: X_MAX - 0.6,  y: 1.9, z: HALL_Z + 5,    rotY: -Math.PI / 2 },
 };
 
 // Camera target — center of the office, raised slightly.
