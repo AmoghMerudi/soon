@@ -18,8 +18,9 @@ async function createTicketStep(input: {
   description: string;
   priority: "critical" | "high" | "medium" | "low";
   tags: string[];
-  assignee: string | null;
+  assignee: string;
   taggedAgents: string[];
+  dependsOn?: string[];
 }) {
   "use step";
 
@@ -33,6 +34,7 @@ async function createTicketStep(input: {
     assignee: input.assignee,
     createdBy: "CEO",
     taggedAgents: input.taggedAgents,
+    dependsOn: input.dependsOn?.map(id => id as Id<"tickets">),
   });
 
   await convex.mutation(api.mutations.logAgentAction, {
@@ -49,7 +51,7 @@ async function createTicketStep(input: {
 async function assignTicketStep(input: {
   projectId: string;
   ticketId: string;
-  assignee: string | null;
+  assignee: string;
 }) {
   "use step";
 
@@ -174,8 +176,9 @@ async function createSubTicketStep(input: {
   description: string;
   priority: "critical" | "high" | "medium" | "low";
   tags: string[];
-  assignee: string | null;
+  assignee: string;
   taggedAgents: string[];
+  dependsOn?: string[];
 }) {
   "use step";
 
@@ -190,6 +193,7 @@ async function createSubTicketStep(input: {
     createdBy: "CEO",
     taggedAgents: input.taggedAgents,
     parentTicket: input.parentTicketId as Id<"tickets">,
+    dependsOn: input.dependsOn?.map(id => id as Id<"tickets">),
   });
 
   await convex.mutation(api.mutations.logAgentAction, {
@@ -209,6 +213,27 @@ async function loadSkillStep(input: { name: string }) {
   const content = getSkillContent(input.name);
   if (!content) return { error: `Skill "${input.name}" not found` };
   return { name: input.name, instructions: content };
+}
+
+async function saveDeliverableStep(input: {
+  projectId: string;
+  ticketId?: string;
+  title: string;
+  body: string;
+  category: "plan" | "analysis" | "report" | "strategy" | "brief" | "spec" | "other";
+}) {
+  "use step";
+
+  const id = await convex.mutation(api.mutations.createDeliverable, {
+    projectId: input.projectId as Id<"projects">,
+    ticketId: (input.ticketId || undefined) as Id<"tickets"> | undefined,
+    title: input.title,
+    body: input.body,
+    category: input.category,
+    createdBy: "CEO",
+  });
+
+  return { deliverableId: id.toString(), title: input.title };
 }
 
 async function saveStripeApiKeyStep(input: {
@@ -268,6 +293,29 @@ async function storeGithubRepoStep(input: {
   return { repoUrl: input.repoUrl, owner: input.owner, repoName: input.repoName };
 }
 
+async function storeVercelProjectStep(input: {
+  projectId: string;
+  vercelProjectId: string;
+  vercelTeamId?: string;
+}) {
+  "use step";
+
+  await convex.mutation(api.mutations.updateProject, {
+    projectId: input.projectId as Id<"projects">,
+    vercelProjectId: input.vercelProjectId,
+    vercelTeamId: input.vercelTeamId,
+  });
+
+  await convex.mutation(api.mutations.logAgentAction, {
+    agent: "CEO",
+    action: "vercel_project_stored",
+    details: `Vercel project stored: ${input.vercelProjectId}`,
+    projectId: input.projectId as Id<"projects">,
+  });
+
+  return { vercelProjectId: input.vercelProjectId };
+}
+
 async function writeQuestionToStream(
   toolCallId: string,
   question: string,
@@ -296,6 +344,26 @@ async function askQuestionExecute(
   return answer;
 }
 
+async function addDependencyStep(input: {
+  ticketId: string;
+  dependsOnTicketId: string;
+}) {
+  "use step";
+
+  await convex.mutation(api.mutations.addDependency, {
+    ticketId: input.ticketId as Id<"tickets">,
+    dependsOnTicketId: input.dependsOnTicketId as Id<"tickets">,
+  });
+
+  await convex.mutation(api.mutations.logAgentAction, {
+    agent: "CEO",
+    action: "add_dependency",
+    details: `Added dependency: ${input.ticketId} depends on ${input.dependsOnTicketId}`,
+  });
+
+  return { ok: true };
+}
+
 // --- Tool factory: builds DurableAgent tool set bound to a project ---
 
 export function buildCeoTools(projectId: Id<"projects">): ToolSet {
@@ -316,13 +384,17 @@ export function buildCeoTools(projectId: Id<"projects">): ToolSet {
             'Domain tags: "engineering", "design", "marketing", "strategy", "infrastructure", "security"'
           ),
         assignee: z
-          .nullable(z.string())
+          .string()
           .describe(
-            "CTO for engineering work, CMO for design/marketing. null for strategy."
+            "REQUIRED. CTO for engineering work, CMO for design/marketing. Every ticket must have an assignee."
           ),
         taggedAgents: z
           .array(z.string())
           .describe("Agents to notify — always include CEO"),
+        dependsOn: z
+          .array(z.string())
+          .optional()
+          .describe("Ticket IDs that must be resolved before this ticket can be dispatched. Use for ordering."),
       }),
       execute: (input: Omit<Parameters<typeof createTicketStep>[0], "projectId">) =>
         createTicketStep({ ...input, projectId: pid }),
@@ -426,8 +498,8 @@ export function buildCeoTools(projectId: Id<"projects">): ToolSet {
         priority: z.enum(["critical", "high", "medium", "low"]),
         tags: z.array(z.string()),
         assignee: z
-          .nullable(z.string())
-          .describe("CTO, CMO, or null for strategy"),
+          .string()
+          .describe("REQUIRED. CTO for engineering, CMO for design/marketing. Every ticket must have an assignee."),
         taggedAgents: z
           .array(z.string())
           .describe("Agents to notify — always include CEO"),
@@ -435,6 +507,16 @@ export function buildCeoTools(projectId: Id<"projects">): ToolSet {
       execute: (
         input: Omit<Parameters<typeof createSubTicketStep>[0], "projectId">
       ) => createSubTicketStep({ ...input, projectId: pid }),
+    },
+
+    addDependency: {
+      description:
+        "Make one ticket depend on another. The dependent ticket will NOT be dispatched until the dependency ticket is resolved. Use this to enforce ordering — e.g., 'scaffold repo' must complete before 'implement features'. IMPORTANT: always set dependencies for tickets that share a repo or have setup requirements.",
+      inputSchema: z.object({
+        ticketId: z.string().describe("The ticket that should wait"),
+        dependsOnTicketId: z.string().describe("The ticket that must be resolved first"),
+      }),
+      execute: addDependencyStep,
     },
 
     loadSkill: {
@@ -474,6 +556,24 @@ export function buildCeoTools(projectId: Id<"projects">): ToolSet {
       execute: askQuestionExecute,
     },
 
+    saveDeliverable: {
+      description:
+        "Save a deliverable to the repository — use this for any significant output: business plans, strategy documents, market analyses, research reports, project briefs, or specs. Always save plans and analyses here so they persist beyond chat and can be referenced later.",
+      inputSchema: z.object({
+        title: z.string().describe("Clear title for the deliverable"),
+        body: z.string().describe("Full content in markdown"),
+        category: z
+          .enum(["plan", "analysis", "report", "strategy", "brief", "spec", "other"])
+          .describe("Type of deliverable"),
+        ticketId: z
+          .string()
+          .optional()
+          .describe("Link to a ticket if this deliverable was produced for one"),
+      }),
+      execute: (input: Omit<Parameters<typeof saveDeliverableStep>[0], "projectId">) =>
+        saveDeliverableStep({ ...input, projectId: pid }),
+    },
+
     storeGithubRepo: {
       description:
         "After creating a GitHub repo via GITHUB_CREATE_REPO, call this to persist the repo URL and owner to the project record so the Developer agent can clone it. Must be called immediately after repo creation.",
@@ -484,6 +584,17 @@ export function buildCeoTools(projectId: Id<"projects">): ToolSet {
       }),
       execute: (input: Omit<Parameters<typeof storeGithubRepoStep>[0], "projectId">) =>
         storeGithubRepoStep({ ...input, projectId: pid }),
+    },
+
+    storeVercelProject: {
+      description:
+        "Persist the Vercel project ID to the project record so the Developer agent can deploy to the same Vercel project on future tickets.",
+      inputSchema: z.object({
+        vercelProjectId: z.string().describe("Vercel project ID"),
+        vercelTeamId: z.string().optional().describe("Vercel team/org ID if applicable"),
+      }),
+      execute: (input: Omit<Parameters<typeof storeVercelProjectStep>[0], "projectId">) =>
+        storeVercelProjectStep({ ...input, projectId: pid }),
     },
 
     exaSearch: exaSearchDurableTool,

@@ -1,5 +1,6 @@
 import { ConvexHttpClient } from "convex/browser";
 import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
 import { z } from "zod";
 import { getSkillContent } from "./skills";
 
@@ -15,6 +16,20 @@ async function updateTicketStatusStep(input: {
   reason?: string;
 }) {
   "use step";
+
+  if (input.status === "in_review") {
+    const artifacts = await convex.query(api.queries.getTicketArtifacts, {
+      ticketId: input.ticketId as Id<"tickets">,
+    });
+    const hasPR = artifacts.some((a) => a.type === "pr");
+    if (!hasPR) {
+      return {
+        ok: false,
+        error:
+          "Cannot move to in_review without a PR artifact. Open a pull request first via `gh pr create`, then attach it with addArtifact (type: 'pr').",
+      };
+    }
+  }
 
   await convex.mutation(api.mutations.updateTicketStatus, {
     ticketId: input.ticketId as never,
@@ -98,12 +113,76 @@ async function markBlockedStep(input: {
   return { ok: true };
 }
 
+async function saveDeliverableStep(input: {
+  ticketId?: string;
+  title: string;
+  body: string;
+  category: "plan" | "analysis" | "report" | "strategy" | "brief" | "spec" | "other";
+}) {
+  "use step";
+
+  let projectId: string | undefined;
+  if (input.ticketId) {
+    let current = await convex.query(api.queries.getTicket, {
+      ticketId: input.ticketId as Id<"tickets">,
+    });
+    while (current && !current.projectId && current.parentTicket) {
+      current = await convex.query(api.queries.getTicket, {
+        ticketId: current.parentTicket,
+      });
+    }
+    projectId = current?.projectId as string | undefined;
+  }
+  if (!projectId) return { error: "Cannot determine project — provide a ticketId" };
+
+  const id = await convex.mutation(api.mutations.createDeliverable, {
+    projectId: projectId as Id<"projects">,
+    ticketId: (input.ticketId || undefined) as Id<"tickets"> | undefined,
+    title: input.title,
+    body: input.body,
+    category: input.category,
+    createdBy: "Developer",
+  });
+
+  return { deliverableId: id.toString(), title: input.title };
+}
+
 async function loadSkillStep(input: { name: string }) {
   "use step";
 
   const content = getSkillContent(input.name);
   if (!content) return { error: `Skill "${input.name}" not found` };
   return { name: input.name, instructions: content };
+}
+
+async function storeVercelProjectStep(input: {
+  ticketId: string;
+  vercelProjectId: string;
+  vercelTeamId?: string;
+}) {
+  "use step";
+
+  const ticket = await convex.query(api.queries.getTicket, {
+    ticketId: input.ticketId as Id<"tickets">,
+  });
+  if (!ticket?.projectId) {
+    return { error: "Ticket has no associated project" };
+  }
+
+  await convex.mutation(api.mutations.updateProject, {
+    projectId: ticket.projectId,
+    vercelProjectId: input.vercelProjectId,
+    vercelTeamId: input.vercelTeamId,
+  });
+
+  await convex.mutation(api.mutations.logAgentAction, {
+    agent: AGENT_NAME,
+    action: "store_vercel_project",
+    details: `Stored Vercel project: ${input.vercelProjectId}`,
+    ticketId: input.ticketId as Id<"tickets">,
+  });
+
+  return { ok: true, vercelProjectId: input.vercelProjectId };
 }
 
 // --- Tool definitions for DurableAgent ---
@@ -192,5 +271,35 @@ export const developerTools = {
         .describe("Skill name from the available skills list"),
     }),
     execute: loadSkillStep,
+  },
+
+  storeVercelProject: {
+    description:
+      "Persist the Vercel project ID (and optional team ID) to the project record so future tickets can deploy to the same Vercel project. Call this after the first `vercel deploy` or `vercel link`.",
+    inputSchema: z.object({
+      ticketId: z.string().describe("Current ticket ID"),
+      vercelProjectId: z
+        .string()
+        .describe("Vercel project ID from `vercel inspect` or `.vercel/project.json`"),
+      vercelTeamId: z
+        .string()
+        .optional()
+        .describe("Vercel team/org ID if applicable"),
+    }),
+    execute: storeVercelProjectStep,
+  },
+
+  saveDeliverable: {
+    description:
+      "Save a deliverable to the repository — technical specs, implementation reports, architecture docs. Persists beyond ticket comments for long-term reference.",
+    inputSchema: z.object({
+      ticketId: z.string().optional().describe("Related ticket ID if applicable"),
+      title: z.string().describe("Clear title for the deliverable"),
+      body: z.string().describe("Full content in markdown"),
+      category: z
+        .enum(["plan", "analysis", "report", "strategy", "brief", "spec", "other"])
+        .describe("Type of deliverable"),
+    }),
+    execute: saveDeliverableStep,
   },
 };

@@ -33,11 +33,16 @@ ${buildSkillsPrompt()}
 
 When a skill name is mentioned in a message, follow its process exactly. Choose between content-workflow and seo-workflow based on the ticket's tags and description.
 
+## Deliverables
+- Always save significant work products to the repository using saveDeliverable — content analyses, SEO reports, campaign performance reports, audience research.
+- Use category "analysis" for research/data, "report" for performance summaries, "strategy" for campaign strategies, "brief" for content briefs.
+
 ## Tools available
 - getTicketDetails: Read ticket details, comments, artifacts, and logs.
 - updateTicketStatus: Move a ticket to a new status.
 - addComment: Add a comment (use this to post draft content for review).
 - addArtifact: Attach a published URL, document, or other artifact to a ticket.
+- saveDeliverable: Save significant outputs to the project repository for long-term reference.
 - markBlocked: Mark a ticket as blocked when missing critical information.`;
 
 export const MARKETING_COMPOSIO_TOOLKITS = ["twitter", "linkedin", "mailchimp"];

@@ -23,7 +23,7 @@ async function createTicketStep(input: {
   description: string;
   priority: "critical" | "high" | "medium" | "low";
   tags: string[];
-  assignee: string | null;
+  assignee: string;
   taggedAgents: string[];
   projectId?: string;
 }) {
@@ -53,7 +53,7 @@ async function createTicketStep(input: {
 
 async function assignTicketStep(input: {
   ticketId: string;
-  assignee: string | null;
+  assignee: string;
 }) {
   "use step";
 
@@ -160,6 +160,36 @@ async function getTicketsByTagStep(input: { tag: string }) {
   }));
 }
 
+async function saveDeliverableStep(input: {
+  ticketId?: string;
+  title: string;
+  body: string;
+  category: "plan" | "analysis" | "report" | "strategy" | "brief" | "spec" | "other";
+  projectId?: string;
+}) {
+  "use step";
+
+  let projectId = input.projectId;
+  if (!projectId && input.ticketId) {
+    const ticket = await convex.query(api.queries.getTicket, {
+      ticketId: input.ticketId as any,
+    });
+    projectId = ticket?.projectId as string | undefined;
+  }
+  if (!projectId) return { error: "Cannot determine project — provide a ticketId" };
+
+  const id = await convex.mutation(api.mutations.createDeliverable, {
+    projectId: projectId as any,
+    ticketId: (input.ticketId || undefined) as any,
+    title: input.title,
+    body: input.body,
+    category: input.category,
+    createdBy: "CMO",
+  });
+
+  return { deliverableId: id.toString(), title: input.title };
+}
+
 async function loadSkillStep(input: { name: string }) {
   "use step";
 
@@ -196,9 +226,9 @@ export function buildCmoTools(projectId?: string) {
           'Domain tags: "design", "marketing", "content", "brand", "campaign", "social"'
         ),
       assignee: z
-        .nullable(z.string())
+        .string()
         .describe(
-          "'Designer' for visual work, 'Marketing' for content/distribution. null for strategy."
+          "REQUIRED. 'Designer' for visual work, 'Marketing' for content/distribution."
         ),
       taggedAgents: z
         .array(z.string())
@@ -294,6 +324,21 @@ export function buildCmoTools(projectId?: string) {
       name: z.string().describe("Skill name from the available skills list"),
     }),
     execute: loadSkillStep,
+  },
+
+  saveDeliverable: {
+    description:
+      "Save a deliverable to the repository — marketing strategies, campaign briefs, brand analyses, content plans. Persists beyond ticket comments for long-term reference.",
+    inputSchema: z.object({
+      ticketId: z.string().optional().describe("Related ticket ID if applicable"),
+      title: z.string().describe("Clear title for the deliverable"),
+      body: z.string().describe("Full content in markdown"),
+      category: z
+        .enum(["plan", "analysis", "report", "strategy", "brief", "spec", "other"])
+        .describe("Type of deliverable"),
+    }),
+    execute: (input: { ticketId?: string; title: string; body: string; category: "plan" | "analysis" | "report" | "strategy" | "brief" | "spec" | "other" }) =>
+      saveDeliverableStep({ ...input, projectId }),
   },
 
   exaSearch: exaSearchDurableTool,

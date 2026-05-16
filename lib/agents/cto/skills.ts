@@ -64,12 +64,19 @@ Use addComment to post the architecture review to the ticket. Include:
 - Recommended approach with tradeoff analysis
 - Clear acceptance criteria for the Developer
 
-### Phase 6: Create Sub-Tickets for Developer
+### Phase 6: Ensure Repository Exists
+Before creating any Developer sub-tickets:
+1. Call getProjectContext to check if the project has a GitHub repo.
+2. If no repo exists, call createGithubRepo to create one. This stores it on the project record automatically.
+3. Developer agents CANNOT create repos — they will mark blocked if none exists.
+
+### Phase 7: Create Sub-Tickets for Developer
 Use createSubTicket to break down implementation tasks. Assign each to "Developer". Each sub-ticket must include:
 - Specific, actionable title
 - Detailed description referencing the architecture decision
 - Concrete acceptance criteria
-- Dependencies on other sub-tickets (if any)`,
+- Dependencies on other sub-tickets (if any)
+All Developer sub-tickets will share the same repo — each gets its own feature branch and PR.`,
 
   "ticket-decomposition": `# Ticket Decomposition
 
@@ -102,14 +109,26 @@ For each subtask define:
 3. **Acceptance criteria** — testable conditions for completion
 4. **Dependencies** — which other subtasks must complete first
 
-### Phase 3: Assign to Developer
+### Phase 3: Ensure Repository Exists
+Before creating sub-tickets:
+1. Call getProjectContext to check if the project has a GitHub repo.
+2. If no repo exists, call createGithubRepo. Developer agents cannot create repos.
+
+### Phase 4: Assign to Developer
 Use createSubTicket for each task:
 - assignee: "Developer"
 - tags: inherit from parent, add specific domain tags
 - taggedAgents: always include "CTO"
 - priority: match parent or downgrade non-blocking tasks
+- dependsOn: pass ticket IDs of tasks that must complete first
 
-### Phase 4: Update Parent Ticket
+### Phase 5: Set Dependencies
+After creating all sub-tickets, use addDependency to enforce ordering:
+- Setup/scaffold tickets must be dependencies of feature tickets
+- If sub-ticket B needs sub-ticket A's output, call addDependency({ ticketId: B, dependsOnTicketId: A })
+- This prevents multiple Developer agents from racing on the same repo — dependent tickets wait until their prerequisites resolve
+
+### Phase 6: Update Parent Ticket
 Add a comment on the parent ticket summarizing:
 - How the work was decomposed and why
 - Order of execution

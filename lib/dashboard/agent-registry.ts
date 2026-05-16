@@ -1,6 +1,11 @@
 import type { RoleKey } from "./constants";
 
-export type ToolCategory = "ticket" | "sandbox" | "search" | "communication" | "skill";
+export type ToolCategory =
+  | "ticket"
+  | "sandbox"
+  | "search"
+  | "communication"
+  | "skill";
 
 export interface ToolMeta {
   name: string;
@@ -113,7 +118,7 @@ export const AGENT_REGISTRY: Record<string, AgentDetail> = {
 
   cto: {
     id: "cto",
-    model: "gpt-4o",
+    model: "gpt-5.4",
     maxSteps: 15,
     entryType: "ticket",
     composioIntegrations: ["github", "sentry", "slack", "linear"],
@@ -132,7 +137,8 @@ export const AGENT_REGISTRY: Record<string, AgentDetail> = {
       },
       {
         name: "assignTicket",
-        description: "Assign or reassign a ticket. CTO delegates to 'Developer' only.",
+        description:
+          "Assign or reassign a ticket. CTO delegates to 'Developer' only.",
         category: "ticket",
       },
       {
@@ -441,9 +447,9 @@ export const TOOL_CATEGORY_STYLES: Record<
   ToolCategory,
   { label: string; bg: string; fg: string }
 > = {
-  ticket:        { label: "Ticket",        bg: "#1F2A45", fg: "#9DB4F0" },
-  sandbox:       { label: "Sandbox",       bg: "#2A1F0F", fg: "#E08A3C" },
-  search:        { label: "Search",        bg: "#16321F", fg: "#7FCFA0" },
+  ticket: { label: "Ticket", bg: "#1F2A45", fg: "#9DB4F0" },
+  sandbox: { label: "Sandbox", bg: "#2A1F0F", fg: "#E08A3C" },
+  search: { label: "Search", bg: "#16321F", fg: "#7FCFA0" },
   communication: { label: "Communication", bg: "#281A3F", fg: "#C09AE8" },
-  skill:         { label: "Skill",         bg: "#2A2208", fg: "#F2C744" },
+  skill: { label: "Skill", bg: "#2A2208", fg: "#F2C744" },
 };

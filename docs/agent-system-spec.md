@@ -746,7 +746,7 @@ Use `prepareStep` to restrict tools by execution phase:
 
 ```typescript
 const developerAgent = new DurableAgent({
-  model: "openai/gpt-4o",
+  model: "openai/gpt-5.4",
   tools: { ...readOnlyTools, ...writeTools, ...deployTools },
   prepareStep: ({ stepNumber }) => {
     if (stepNumber <= 3) return { activeTools: Object.keys(readOnlyTools) };
@@ -843,4 +843,3 @@ agentConfig: defineTable({
 }).index("by_agentId", ["agentId"])
   .index("by_status", ["status"]),
 ```
-
