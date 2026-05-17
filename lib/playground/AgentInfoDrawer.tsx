@@ -3,7 +3,6 @@
 import { AGENT_REGISTRY, type ToolCategory } from "@/lib/dashboard/agent-registry";
 import { ROLES, MANAGER, type RoleKey } from "@/lib/dashboard/constants";
 import { TEAM_COMM } from "./teamComm";
-import { PlaygroundSprite } from "./sprites";
 
 const CATEGORY_LABEL: Record<ToolCategory, string> = {
   ticket: "Ticket ops",
@@ -121,6 +120,7 @@ export function AgentInfoDrawer({
       {/* Header */}
       <div className="flex items-center" style={{ gap: 16, marginTop: 4 }}>
         <div
+          className="font-mono"
           style={{
             width: 72,
             height: 96,
@@ -128,12 +128,15 @@ export function AgentInfoDrawer({
             border: `2px solid ${meta.color}`,
             borderRadius: 6,
             display: "flex",
-            alignItems: "flex-end",
+            alignItems: "center",
             justifyContent: "center",
-            paddingBottom: 4,
+            color: meta.color,
+            fontSize: 36,
+            fontWeight: 700,
+            letterSpacing: "0.04em",
           }}
         >
-          <PlaygroundSprite role={role} height={88} />
+          {meta.initial}
         </div>
         <div className="flex-1">
           <div

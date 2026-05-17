@@ -241,3 +241,39 @@ export const getAgentConfigs = query({
     return await ctx.db.query("agentConfig").collect();
   },
 });
+
+export const getRecentMentionsByProject = query({
+  args: {
+    projectId: v.id("projects"),
+    sinceTs: v.optional(v.number()),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const limit = Math.max(1, Math.min(args.limit ?? 40, 200));
+    const sinceTs = args.sinceTs ?? 0;
+
+    // Pull recent comments scoped to the project, filter to those with mentions
+    // and authored after `sinceTs`. Returns newest-first.
+    const comments = await ctx.db
+      .query("comments")
+      .withIndex("by_project_ticket", (q) => q.eq("projectId", args.projectId))
+      .collect();
+
+    return comments
+      .filter(
+        (c) =>
+          c._creationTime > sinceTs &&
+          c.mentions !== undefined &&
+          c.mentions.length > 0,
+      )
+      .sort((a, b) => b._creationTime - a._creationTime)
+      .slice(0, limit)
+      .map((c) => ({
+        _id: c._id,
+        ticketId: c.ticketId,
+        author: c.author,
+        mentions: c.mentions ?? [],
+        createdAt: c._creationTime,
+      }));
+  },
+});
