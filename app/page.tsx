@@ -987,7 +987,7 @@ function FinalCTA() {
         >
           The next company you start
           <br />
-          <span style={{ color: SIGNAL }}>doesn't need a team.</span>
+          <span style={{ color: SIGNAL }}>doesn&apos;t need a team.</span>
         </h2>
         <p
           className="font-sans"

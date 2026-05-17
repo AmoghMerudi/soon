@@ -210,4 +210,105 @@ export default defineSchema({
   })
     .index("by_thread", ["threadId", "createdAt"])
     .index("by_project_thread", ["projectId", "threadId"]),
+
+  collabUsers: defineTable({
+    email: v.string(),
+    passwordHash: v.optional(v.string()),
+    googleSub: v.optional(v.string()),
+    appleSub: v.optional(v.string()),
+    name: v.string(),
+    role: v.union(v.literal("brand"), v.literal("influencer")),
+    companyName: v.optional(v.string()),
+    bio: v.optional(v.string()),
+    niche: v.optional(v.string()),
+    websiteUrl: v.optional(v.string()),
+    location: v.optional(v.string()),
+    followerCount: v.optional(v.number()),
+    engagementRate: v.optional(v.number()),
+    subscriptionTier: v.union(v.literal("free"), v.literal("basic"), v.literal("pro")),
+    subscriptionStatus: v.optional(
+      v.union(
+        v.literal("inactive"),
+        v.literal("active"),
+        v.literal("trialing"),
+        v.literal("past_due"),
+        v.literal("cancelled")
+      )
+    ),
+    stripeCustomerId: v.optional(v.string()),
+    stripeSubscriptionId: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_email", ["email"])
+    .index("by_role", ["role"])
+    .index("by_role_niche", ["role", "niche"]),
+
+  collabCampaigns: defineTable({
+    brandId: v.id("collabUsers"),
+    title: v.string(),
+    description: v.string(),
+    category: v.string(),
+    budgetMin: v.number(),
+    budgetMax: v.number(),
+    timeline: v.string(),
+    deliverables: v.string(),
+    requiredFollowers: v.optional(v.number()),
+    status: v.union(
+      v.literal("open"),
+      v.literal("reviewing"),
+      v.literal("in_progress"),
+      v.literal("completed"),
+      v.literal("cancelled")
+    ),
+    applicationsCount: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_status", ["status"])
+    .index("by_brand", ["brandId"])
+    .index("by_category_status", ["category", "status"])
+    .index("by_createdAt", ["createdAt"]),
+
+  collabApplications: defineTable({
+    campaignId: v.id("collabCampaigns"),
+    brandId: v.id("collabUsers"),
+    influencerId: v.id("collabUsers"),
+    pitch: v.string(),
+    proposedFee: v.number(),
+    portfolioUrl: v.optional(v.string()),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("accepted"),
+      v.literal("rejected"),
+      v.literal("withdrawn")
+    ),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_campaign", ["campaignId"])
+    .index("by_brand", ["brandId"])
+    .index("by_influencer", ["influencerId"])
+    .index("by_campaign_influencer", ["campaignId", "influencerId"]),
+
+  collabConversations: defineTable({
+    participantOneId: v.id("collabUsers"),
+    participantTwoId: v.id("collabUsers"),
+    pairKey: v.string(),
+    campaignId: v.optional(v.id("collabCampaigns")),
+    lastMessage: v.optional(v.string()),
+    lastMessageAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_pair", ["pairKey"])
+    .index("by_participant_one", ["participantOneId", "updatedAt"])
+    .index("by_participant_two", ["participantTwoId", "updatedAt"]),
+
+  collabMessages: defineTable({
+    conversationId: v.id("collabConversations"),
+    senderId: v.id("collabUsers"),
+    body: v.string(),
+    createdAt: v.number(),
+  }).index("by_conversation", ["conversationId", "createdAt"]),
 });

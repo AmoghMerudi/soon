@@ -11,6 +11,7 @@
 import type * as agentSteps from "../agentSteps.js";
 import type * as ceoChatMutations from "../ceoChatMutations.js";
 import type * as ceoChatQueries from "../ceoChatQueries.js";
+import type * as collabhub from "../collabhub.js";
 import type * as crons from "../crons.js";
 import type * as dispatch from "../dispatch.js";
 import type * as escalation from "../escalation.js";
@@ -33,6 +34,7 @@ declare const fullApi: ApiFromModules<{
   agentSteps: typeof agentSteps;
   ceoChatMutations: typeof ceoChatMutations;
   ceoChatQueries: typeof ceoChatQueries;
+  collabhub: typeof collabhub;
   crons: typeof crons;
   dispatch: typeof dispatch;
   escalation: typeof escalation;
